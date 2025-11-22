@@ -507,13 +507,23 @@ def create_test_type(current_user):
     if TestType.query.filter_by(name=data.get('name')).first():
         return jsonify({'message': 'Ez a vizsgálattípus már létezik!'}), 400
     
+    # Üres string-eket None-ra konvertálás
+    department_id = data.get('department_id')
+    if department_id == '':
+        department_id = None
+    
+    category_id = data.get('category_id')
+    if category_id == '':
+        category_id = None
+    
     new_test_type = TestType(
         name=data.get('name'),
         description=data.get('description'),
         price=float(data.get('price')),
-        department_id=data.get('department_id'),
-        category_id=data.get('category_id'),  # v6.6
-        turnaround_days=int(data.get('turnaround_days', 7))
+        department_id=department_id,
+        category_id=category_id,
+        turnaround_days=int(data.get('turnaround_days', 7)),
+        is_active=data.get('is_active', True)
     )
     db.session.add(new_test_type)
     db.session.commit()
@@ -533,9 +543,11 @@ def update_test_type(current_user, test_type_id):
     if 'price' in data:
         test_type.price = float(data['price'])
     if 'department_id' in data:
-        test_type.department_id = data['department_id']
-    if 'category_id' in data:  # v6.6
-        test_type.category_id = data['category_id']
+        # Üres string esetén None
+        test_type.department_id = data['department_id'] if data['department_id'] != '' else None
+    if 'category_id' in data:
+        # Üres string esetén None
+        test_type.category_id = data['category_id'] if data['category_id'] != '' else None
     if 'turnaround_days' in data:
         test_type.turnaround_days = int(data['turnaround_days'])
     if 'is_active' in data:
