@@ -26,8 +26,8 @@ function TestTypeManagement() {
     price: '',
     department_id: '',
     category_id: '',
-    
-    turnaround_days: '7'
+    turnaround_days: '7',
+    is_active: true
   });
 
   useEffect(() => {
@@ -72,7 +72,7 @@ function TestTypeManagement() {
       
       setShowModal(false);
       setEditingId(null);
-      setFormData({ name: '', description: '', price: '', department_id: '', category_id: '', turnaround_days: '7' });
+      setFormData({ name: '', description: '', price: '', department_id: '', category_id: '', turnaround_days: '7', is_active: true });
       fetchData();
     } catch (err) {
       setError(err.response?.data?.message || 'Hiba történt a művelet során');
@@ -88,7 +88,8 @@ function TestTypeManagement() {
       department_id: testType.department_id || '',
       
       category_id: testType.category_id || '',
-      turnaround_days: testType.turnaround_days || 7
+      turnaround_days: testType.turnaround_days || 7,
+      is_active: testType.is_active !== undefined ? testType.is_active : true
     });
     setShowModal(true);
   };
@@ -347,6 +348,21 @@ function TestTypeManagement() {
                   step="1000"
                 />
               </div>
+
+              {editingId && (
+                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="is_active"
+                    checked={formData.is_active}
+                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                  />
+                  <label htmlFor="is_active" className="text-sm font-medium text-gray-700">
+                    Aktív státusz (csak aktív vizsgálatok jelennek meg a kérőlapon)
+                  </label>
+                </div>
+              )}
 
               <div className="flex gap-3 pt-4">
                 <button
