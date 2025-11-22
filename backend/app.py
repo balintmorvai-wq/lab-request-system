@@ -28,6 +28,11 @@ if DATABASE_URL.startswith('postgres://'):
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+    'connect_args': {'connect_timeout': 10}
+}
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['LOGO_FOLDER'] = 'uploads/logos'
 app.config['ATTACHMENT_FOLDER'] = 'uploads/attachments'
@@ -41,7 +46,9 @@ os.makedirs(app.config['ATTACHMENT_FOLDER'], exist_ok=True)
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
 CORS(app, origins=[FRONTEND_URL, 'http://localhost:3000'])
 
-db = SQLAlchemy(app)
+# Lazy database initialization
+db = SQLAlchemy()
+db.init_app(app)
 
 ALLOWED_LOGO_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 ALLOWED_ATTACHMENT_EXTENSIONS = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'}
@@ -1208,6 +1215,15 @@ def init_db():
             print("✅ Példa laborkérések létrehozva!")
         
         print("\n🎉 Adatbázis inicializálva!")
+
+@app.route('/api/init', methods=['GET'])
+def initialize_database():
+    """Database initialization endpoint - csak egyszer kell meghívni!"""
+    try:
+        init_db()
+        return jsonify({"message": "✅ Database initialized successfully!"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     init_db()
