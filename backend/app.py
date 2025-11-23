@@ -1395,6 +1395,56 @@ def init_db():
         
         print("\n🎉 Adatbázis inicializálva!")
 
+@app.route('/api/migrate', methods=['GET'])
+def run_migration():
+    """Database migration endpoint - adds icon column if missing"""
+    try:
+        with app.app_context():
+            # Check if icon column exists
+            from sqlalchemy import inspect
+            inspector = inspect(db.engine)
+            columns = [col['name'] for col in inspector.get_columns('request_category')]
+            
+            if 'icon' in columns:
+                return jsonify({"message": "✅ Column 'icon' already exists!"}), 200
+            
+            # Add icon column using raw SQL (works for both SQLite and PostgreSQL)
+            with db.engine.connect() as conn:
+                # PostgreSQL / SQLite compatible
+                conn.execute(db.text("""
+                    ALTER TABLE request_category 
+                    ADD COLUMN icon VARCHAR(50) DEFAULT 'Beaker'
+                """))
+                conn.commit()
+            
+            # Update existing categories
+            categories_to_update = [
+                ('Minta előkészítés', 'Package'),
+                ('Nyersolaj vizsgálatok', 'Droplet'),
+                ('Finomított termékek', 'Fuel'),
+                ('Kenőanyagok', 'Droplets'),
+                ('Biodízel és bioüzemanyagok', 'Leaf'),
+                ('Additívok', 'Beaker'),
+                ('Környezetvédelem', 'TreePine'),
+                ('Gázok', 'Wind'),
+                ('Korrózió és kompatibilitás', 'AlertTriangle'),
+            ]
+            
+            for name, icon in categories_to_update:
+                cat = RequestCategory.query.filter_by(name=name).first()
+                if cat:
+                    cat.icon = icon
+            
+            db.session.commit()
+            
+            return jsonify({
+                "message": "✅ Migration completed successfully!",
+                "details": "Added 'icon' column to request_category table"
+            }), 200
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/init', methods=['GET'])
 def initialize_database():
     """Database initialization endpoint - csak egyszer kell meghívni!"""
