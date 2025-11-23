@@ -1445,6 +1445,39 @@ def run_migration():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/reset-data', methods=['POST'])
+def reset_test_data():
+    """
+    DANGER: Törli az ÖSSZES tesztadatot és újrainicializálja v6.7-tel!
+    Csak POST metódus védelem miatt
+    """
+    try:
+        with app.app_context():
+            # DELETE old data
+            LabRequest.query.delete()
+            TestType.query.delete()
+            RequestCategory.query.delete()
+            Department.query.delete()
+            User.query.delete()
+            Company.query.delete()
+            db.session.commit()
+            
+            # INIT new data (call existing init_db logic)
+            init_db()
+            
+            return jsonify({
+                "message": "✅ Data reset completed!",
+                "categories": RequestCategory.query.count(),
+                "test_types": TestType.query.count(),
+                "departments": Department.query.count(),
+                "companies": Company.query.count(),
+                "users": User.query.count()
+            }), 200
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/init', methods=['GET'])
 def initialize_database():
     """Database initialization endpoint - csak egyszer kell meghívni!"""
