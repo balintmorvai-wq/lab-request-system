@@ -4,7 +4,8 @@ import axios from 'axios';
 import { 
   UserPlus, 
   Search, 
-  Trash2, 
+  Trash2,
+  Edit2,
   X,
   AlertCircle,
   Users as UsersIcon
@@ -17,9 +18,10 @@ function UserManagement() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
   
-  const [newUser, setNewUser] = useState({
+  const [formData, setFormData] = useState({
     email: '',
     password: '',
     name: '',
@@ -48,19 +50,30 @@ function UserManagement() {
     fetchData();
   }, [fetchData]);
 
-  const handleCreateUser = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     try {
-      await axios.post(
-        `${API_URL}/users`,
-        newUser,
-        { headers: getAuthHeaders() }
-      );
+      if (editingId) {
+        // Update existing user
+        await axios.put(
+          `${API_URL}/users/${editingId}`,
+          formData,
+          { headers: getAuthHeaders() }
+        );
+      } else {
+        // Create new user
+        await axios.post(
+          `${API_URL}/users`,
+          formData,
+          { headers: getAuthHeaders() }
+        );
+      }
       
       setShowModal(false);
-      setNewUser({
+      setEditingId(null);
+      setFormData({
         email: '',
         password: '',
         name: '',
@@ -70,8 +83,21 @@ function UserManagement() {
       });
       fetchData();
     } catch (err) {
-      setError(err.response?.data?.message || 'Hiba történt a felhasználó létrehozása során');
+      setError(err.response?.data?.message || 'Hiba történt a művelet során');
     }
+  };
+
+  const handleEdit = (user) => {
+    setEditingId(user.id);
+    setFormData({
+      email: user.email,
+      password: '', // Don't populate password for security
+      name: user.name,
+      role: user.role,
+      company_id: user.company_id || '',
+      phone: user.phone || ''
+    });
+    setShowModal(true);
   };
 
   const handleDeleteUser = async (userId) => {
@@ -199,14 +225,22 @@ function UserManagement() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {u.phone || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                     {u.id !== user?.id && (
-                      <button
-                        onClick={() => handleDeleteUser(u.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleEdit(u)}
+                          className="text-indigo-600 hover:text-indigo-900"
+                        >
+                          <Edit2 className="w-5 h-5 inline" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteUser(u.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 className="w-5 h-5 inline" />
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -216,17 +250,18 @@ function UserManagement() {
         </table>
       </div>
 
-      {/* Create User Modal */}
+      {/* Create/Edit User Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">
-                Új felhasználó létrehozása
+                {editingId ? 'Felhasználó szerkesztése' : 'Új felhasználó létrehozása'}
               </h2>
               <button
                 onClick={() => {
                   setShowModal(false);
+                  setEditingId(null);
                   setError('');
                 }}
                 className="text-gray-400 hover:text-gray-600"
@@ -235,7 +270,7 @@ function UserManagement() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {error && (
                 <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg">
                   <AlertCircle className="w-5 h-5" />
@@ -249,8 +284,8 @@ function UserManagement() {
                 </label>
                 <input
                   type="text"
-                  value={newUser.name}
-                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   required
                 />
@@ -262,8 +297,8 @@ function UserManagement() {
                 </label>
                 <input
                   type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   required
                 />
@@ -271,15 +306,16 @@ function UserManagement() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Jelszó *
+                  Jelszó {editingId ? '(hagyd üresen, ha nem akarod módosítani)' : '*'}
                 </label>
                 <input
                   type="password"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
+                  required={!editingId}
                   minLength="6"
+                  placeholder={editingId ? 'Hagyd üresen a megtartásához' : ''}
                 />
               </div>
 
@@ -288,8 +324,8 @@ function UserManagement() {
                   Szerepkör *
                 </label>
                 <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   required
                 >
@@ -304,14 +340,14 @@ function UserManagement() {
                 </select>
               </div>
 
-              {(newUser.role === 'company_admin' || newUser.role === 'company_user') && (
+              {(formData.role === 'company_admin' || formData.role === 'company_user') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Cég *
                   </label>
                   <select
-                    value={newUser.company_id}
-                    onChange={(e) => setNewUser({ ...newUser, company_id: e.target.value })}
+                    value={formData.company_id}
+                    onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     required
                     disabled={user?.role === 'company_admin'}
@@ -332,8 +368,8 @@ function UserManagement() {
                 </label>
                 <input
                   type="tel"
-                  value={newUser.phone}
-                  onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 />
               </div>
@@ -343,12 +379,13 @@ function UserManagement() {
                   type="submit"
                   className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
                 >
-                  Létrehozás
+                  {editingId ? 'Mentés' : 'Létrehozás'}
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false);
+                    setEditingId(null);
                     setError('');
                   }}
                   className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"

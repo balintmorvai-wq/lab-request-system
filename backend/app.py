@@ -1035,6 +1035,48 @@ def delete_user(current_user, user_id):
     
     return jsonify({'message': 'Felhasználó sikeresen törölve!'})
 
+@app.route('/api/users/<int:user_id>', methods=['PUT'])
+@token_required
+@role_required('super_admin', 'company_admin')
+def update_user(current_user, user_id):
+    user = User.query.get_or_404(user_id)
+    data = request.get_json()
+    
+    # Permission check
+    if current_user.role == 'company_admin' and user.company_id != current_user.company_id:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    # Email uniqueness check (if email is being changed)
+    if 'email' in data and data['email'] != user.email:
+        if User.query.filter_by(email=data['email']).first():
+            return jsonify({'message': 'Ez az email cím már használatban van!'}), 400
+    
+    # Update fields
+    if 'name' in data:
+        user.name = data['name']
+    if 'email' in data:
+        user.email = data['email']
+    if 'phone' in data:
+        user.phone = data['phone']
+    if 'password' in data and data['password']:  # Only if password provided
+        user.password = generate_password_hash(data['password'])
+    if 'role' in data:
+        # Company admin cannot change role to super_admin or lab_staff
+        if current_user.role == 'company_admin':
+            if data['role'] in ['super_admin', 'lab_staff']:
+                return jsonify({'message': 'Nincs jogosultságod ezt a szerepkört beállítani!'}), 403
+        user.role = data['role']
+    if 'company_id' in data:
+        # Company admin cannot change company
+        if current_user.role == 'company_admin':
+            return jsonify({'message': 'Nincs jogosultságod a céget módosítani!'}), 403
+        # Empty string to None
+        user.company_id = data['company_id'] if data['company_id'] != '' else None
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'Felhasználó sikeresen frissítve!'})
+
 # --- Stats Route ---
 @app.route('/api/stats', methods=['GET'])
 @token_required
