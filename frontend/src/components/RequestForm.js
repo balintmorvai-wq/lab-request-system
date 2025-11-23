@@ -22,13 +22,12 @@ import {
   Leaf,
   Beaker,
   TreePine,
-  Wind,
-  Flask
+  Wind
 } from 'lucide-react';
 
 // Icon mapping for dynamic rendering
 const iconMap = {
-  Package, Droplet, Fuel, Droplets, Leaf, Beaker, TreePine, Wind, Flask, AlertTriangle
+  Package, Droplet, Fuel, Droplets, Leaf, Beaker, TreePine, Wind, AlertTriangle
 };
 
 function RequestForm() {
@@ -425,7 +424,7 @@ function RequestForm() {
             const categoryTests = testTypes.filter(tt => tt.category_id === category.id && tt.is_active);
             if (categoryTests.length === 0) return null;
             
-            const Icon = iconMap[category.icon] || Flask;
+            const Icon = iconMap[category.icon] || Beaker;
             const isCollapsed = collapsedCategories[category.id];
             const isSamplePrep = category.name === 'Minta előkészítés';
 

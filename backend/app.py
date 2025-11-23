@@ -107,7 +107,7 @@ class RequestCategory(db.Model):
     name = db.Column(db.String(100), nullable=False, unique=True)
     description = db.Column(db.Text)
     color = db.Column(db.String(7), default='#6B7280')  # Hex color
-    icon = db.Column(db.String(50), default='Flask')  # Lucide icon name
+    icon = db.Column(db.String(50), default='Beaker')  # Lucide icon name
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -251,7 +251,7 @@ def create_category(current_user):
         name=data.get('name'),
         description=data.get('description'),
         color=data.get('color', '#6B7280'),
-        icon=data.get('icon', 'Flask')
+        icon=data.get('icon', 'Beaker')
     )
     db.session.add(new_category)
     db.session.commit()
