@@ -1004,13 +1004,17 @@ def create_user(current_user):
     if current_user.role == 'company_admin':
         company_id = current_user.company_id
     
+    # Handle empty string as None for company_id
+    if company_id == '' or company_id == 'null':
+        company_id = None
+    
     new_user = User(
         email=data.get('email'),
         password=generate_password_hash(data.get('password')),
         name=data.get('name'),
         role=data.get('role'),
         company_id=company_id,
-        phone=data.get('phone')
+        phone=data.get('phone') if data.get('phone') else None
     )
     
     db.session.add(new_user)

@@ -53,22 +53,30 @@ function UserManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
+    console.log('📤 SUBMIT CLICKED');
+    console.log('editingId:', editingId);
+    console.log('formData:', formData);
 
     try {
       if (editingId) {
         // Update existing user
+        console.log('🔄 Updating user:', editingId);
         await axios.put(
           `${API_URL}/users/${editingId}`,
           formData,
           { headers: getAuthHeaders() }
         );
+        console.log('✅ User updated successfully');
       } else {
         // Create new user
+        console.log('➕ Creating new user');
         await axios.post(
           `${API_URL}/users`,
           formData,
           { headers: getAuthHeaders() }
         );
+        console.log('✅ User created successfully');
       }
       
       setShowModal(false);
@@ -83,11 +91,14 @@ function UserManagement() {
       });
       fetchData();
     } catch (err) {
+      console.error('❌ Submit error:', err);
+      console.error('Error response:', err.response?.data);
       setError(err.response?.data?.message || 'Hiba történt a művelet során');
     }
   };
 
   const handleEdit = (user) => {
+    console.log('🔧 EDIT CLICKED:', user);
     setEditingId(user.id);
     setFormData({
       email: user.email,
@@ -96,6 +107,13 @@ function UserManagement() {
       role: user.role,
       company_id: user.company_id || '',
       phone: user.phone || ''
+    });
+    console.log('✅ Edit modal opening with formData:', {
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      company_id: user.company_id,
+      editingId: user.id
     });
     setShowModal(true);
   };
@@ -208,7 +226,9 @@ function UserManagement() {
                 </td>
               </tr>
             ) : (
-              filteredUsers.map((u) => (
+              filteredUsers.map((u) => {
+                console.log('🔍 Rendering user:', u.id, u.name, 'Current user:', user?.id);
+                return (
                 <tr key={u.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{u.name}</div>
@@ -226,25 +246,29 @@ function UserManagement() {
                     {u.phone || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
-                    {u.id !== user?.id && (
+                    {u.id !== user?.id ? (
                       <>
                         <button
                           onClick={() => handleEdit(u)}
                           className="text-indigo-600 hover:text-indigo-900"
+                          title="Szerkesztés"
                         >
                           <Edit2 className="w-5 h-5 inline" />
                         </button>
                         <button
                           onClick={() => handleDeleteUser(u.id)}
                           className="text-red-600 hover:text-red-900"
+                          title="Törlés"
                         >
                           <Trash2 className="w-5 h-5 inline" />
                         </button>
                       </>
+                    ) : (
+                      <span className="text-gray-400 text-xs">Saját fiók</span>
                     )}
                   </td>
                 </tr>
-              ))
+              )})
             )}
           </tbody>
         </table>
