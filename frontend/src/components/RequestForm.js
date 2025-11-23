@@ -11,8 +11,25 @@ import {
   Send,
   Paperclip,
   X,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  // Category icons
+  Package,
+  Droplet,
+  Fuel,
+  Droplets,
+  Leaf,
+  Beaker,
+  TreePine,
+  Wind,
+  Flask
 } from 'lucide-react';
+
+// Icon mapping for dynamic rendering
+const iconMap = {
+  Package, Droplet, Fuel, Droplets, Leaf, Beaker, TreePine, Wind, Flask, AlertTriangle
+};
 
 function RequestForm() {
   const { user, getAuthHeaders, API_URL } = useAuth();
@@ -22,6 +39,7 @@ function RequestForm() {
   const [testTypes, setTestTypes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedTests, setSelectedTests] = useState([]);
+  const [collapsedCategories, setCollapsedCategories] = useState({}); // Track collapsed state
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [existingAttachment, setExistingAttachment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -51,7 +69,22 @@ function RequestForm() {
       const response = await axios.get(`${API_URL}/categories`, {
         headers: getAuthHeaders()
       });
-      setCategories(response.data.filter(c => c.is_active));
+      // Sort categories: "Minta előkészítés" first, then others
+      const sortedCategories = response.data
+        .filter(c => c.is_active)
+        .sort((a, b) => {
+          if (a.name === 'Minta előkészítés') return -1;
+          if (b.name === 'Minta előkészítés') return 1;
+          return 0;
+        });
+      setCategories(sortedCategories);
+      
+      // Initialize collapsed state - all collapsed except "Minta előkészítés"
+      const initialCollapsedState = {};
+      sortedCategories.forEach(cat => {
+        initialCollapsedState[cat.id] = cat.name !== 'Minta előkészítés';
+      });
+      setCollapsedCategories(initialCollapsedState);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -139,6 +172,13 @@ function RequestForm() {
         ? prev.filter(id => id !== testTypeId)
         : [...prev, testTypeId]
     );
+  };
+
+  const toggleCategory = (categoryId) => {
+    setCollapsedCategories(prev => ({
+      ...prev,
+      [categoryId]: !prev[categoryId]
+    }));
   };
 
   const calculateTotalPrice = () => {
@@ -380,50 +420,96 @@ function RequestForm() {
             Vizsgálatok
           </h2>
 
-          {/* Group by Category - v6.6 */}
-          {categories.filter(cat => cat.is_active).map((category) => {
+          {/* Group by Category - v6.6 with collapsible and icons */}
+          {categories.filter(cat => cat.is_active).map((category, index) => {
             const categoryTests = testTypes.filter(tt => tt.category_id === category.id && tt.is_active);
             if (categoryTests.length === 0) return null;
+            
+            const Icon = iconMap[category.icon] || Flask;
+            const isCollapsed = collapsedCategories[category.id];
+            const isSamplePrep = category.name === 'Minta előkészítés';
 
             return (
-              <div key={category.id} className="border border-gray-200 rounded-lg p-4">
-                <h3 
-                  className="font-semibold text-gray-900 mb-3 pb-2 border-b"
-                  style={{ borderColor: category.color, color: category.color }}
+              <div 
+                key={category.id} 
+                className={`border-2 rounded-lg ${isSamplePrep ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}
+              >
+                {/* Category Header - Clickable to toggle */}
+                <div 
+                  onClick={() => toggleCategory(category.id)}
+                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  style={{ 
+                    borderBottom: isCollapsed ? 'none' : `2px solid ${category.color}20`
+                  }}
                 >
-                  {category.name}
-                </h3>
-                <div className="space-y-2">
-                  {categoryTests.map((testType) => (
-                    <label
-                      key={testType.id}
-                      className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedTests.includes(testType.id)}
-                        onChange={() => toggleTestType(testType.id)}
-                        className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                      />
-                      <div className="ml-3 flex-1">
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-gray-900">{testType.name}</span>
-                          <span className="text-sm font-semibold text-indigo-600">
-                            {testType.price.toLocaleString('hu-HU')} Ft
+                  <div className="flex items-center gap-3">
+                    <Icon 
+                      className="w-6 h-6" 
+                      style={{ color: category.color }}
+                    />
+                    <div>
+                      <h3 
+                        className="font-semibold text-lg"
+                        style={{ color: category.color }}
+                      >
+                        {category.name}
+                        {isSamplePrep && (
+                          <span className="ml-2 text-xs bg-indigo-600 text-white px-2 py-1 rounded-full">
+                            Kötelező
                           </span>
-                        </div>
-                        {testType.description && (
-                          <p className="text-sm text-gray-500 mt-1">{testType.description}</p>
                         )}
-                        {testType.turnaround_days && (
-                          <p className="text-xs text-gray-400 mt-1">
-                            Átfutási idő: {testType.turnaround_days} nap
-                          </p>
-                        )}
-                      </div>
-                    </label>
-                  ))}
+                      </h3>
+                      {category.description && (
+                        <p className="text-sm text-gray-500 mt-1">{category.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500">
+                      {categoryTests.length} vizsgálat
+                    </span>
+                    {isCollapsed ? (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                    )}
+                  </div>
                 </div>
+
+                {/* Category Tests - Collapsible */}
+                {!isCollapsed && (
+                  <div className="p-4 space-y-2">
+                    {categoryTests.map((testType) => (
+                      <label
+                        key={testType.id}
+                        className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTests.includes(testType.id)}
+                          onChange={() => toggleTestType(testType.id)}
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                        />
+                        <div className="ml-3 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-900">{testType.name}</span>
+                            <span className="text-sm font-semibold text-indigo-600">
+                              {testType.price.toLocaleString('hu-HU')} Ft
+                            </span>
+                          </div>
+                          {testType.description && (
+                            <p className="text-sm text-gray-500 mt-1">{testType.description}</p>
+                          )}
+                          {testType.turnaround_days && (
+                            <p className="text-xs text-gray-400 mt-1">
+                              Átfutási idő: {testType.turnaround_days} nap
+                            </p>
+                          )}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
