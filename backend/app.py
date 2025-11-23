@@ -1423,6 +1423,64 @@ def init_db():
         
         print("\n🎉 Adatbázis inicializálva!")
 
+def auto_migrate():
+    """
+    Automatic migration that runs on app startup
+    Checks and adds missing columns without requiring manual intervention
+    """
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        
+        # Get existing columns
+        lab_request_columns = [col['name'] for col in inspector.get_columns('lab_request')]
+        department_columns = [col['name'] for col in inspector.get_columns('department')]
+        
+        migrations_applied = []
+        
+        # LabRequest migrations
+        if 'sampling_address' not in lab_request_columns:
+            db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN sampling_address VARCHAR(500)"))
+            migrations_applied.append('lab_request.sampling_address')
+            print("  🔄 Auto-migration: Added sampling_address to lab_request")
+        
+        if 'contact_person' not in lab_request_columns:
+            db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN contact_person VARCHAR(200)"))
+            migrations_applied.append('lab_request.contact_person')
+            print("  🔄 Auto-migration: Added contact_person to lab_request")
+        
+        if 'contact_phone' not in lab_request_columns:
+            db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN contact_phone VARCHAR(50)"))
+            migrations_applied.append('lab_request.contact_phone')
+            print("  🔄 Auto-migration: Added contact_phone to lab_request")
+        
+        # Department migrations
+        if 'sample_pickup_address' not in department_columns:
+            db.session.execute(db.text("ALTER TABLE department ADD COLUMN sample_pickup_address VARCHAR(500)"))
+            migrations_applied.append('department.sample_pickup_address')
+            print("  🔄 Auto-migration: Added sample_pickup_address to department")
+        
+        if 'sample_pickup_contact' not in department_columns:
+            db.session.execute(db.text("ALTER TABLE department ADD COLUMN sample_pickup_contact VARCHAR(200)"))
+            migrations_applied.append('department.sample_pickup_contact')
+            print("  🔄 Auto-migration: Added sample_pickup_contact to department")
+        
+        if migrations_applied:
+            db.session.commit()
+            print(f"✅ Auto-migration completed! Applied {len(migrations_applied)} changes:")
+            for migration in migrations_applied:
+                print(f"   - {migration}")
+        else:
+            print("✅ Database schema is up to date (no migrations needed)")
+        
+        return True
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"⚠️  Auto-migration failed: {e}")
+        print("   Application will continue, but some features may not work correctly.")
+        return False
+
 @app.route('/api/init', methods=['GET'])
 def initialize_database():
     """Database initialization endpoint - csak egyszer kell meghívni!"""
@@ -1432,15 +1490,112 @@ def initialize_database():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/migrate-v2', methods=['POST'])
+@token_required
+def migrate_v2_endpoint(current_user):
+    """
+    Migration endpoint for v6.6 ENHANCED v2
+    Adds new columns: sampling_address, contact_person, contact_phone
+    Only super_admin can run this
+    """
+    if current_user.role != 'super_admin':
+        return jsonify({'message': '⛔ Nincs jogosultságod! Csak super_admin futtathatja.'}), 403
+    
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        
+        # Get existing columns
+        lab_request_columns = [col['name'] for col in inspector.get_columns('lab_request')]
+        department_columns = [col['name'] for col in inspector.get_columns('department')]
+        
+        results = []
+        
+        print("🔄 Starting migration for v6.6 ENHANCED v2...")
+        
+        # Migrate LabRequest table
+        print("\n📋 Migrating LabRequest table...")
+        
+        if 'sampling_address' not in lab_request_columns:
+            db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN sampling_address VARCHAR(500)"))
+            results.append('✅ Added: lab_request.sampling_address')
+            print("  ✅ Adding column: sampling_address")
+        else:
+            results.append('⏭️  Already exists: lab_request.sampling_address')
+            print("  ⏭️  Column already exists: sampling_address")
+        
+        if 'contact_person' not in lab_request_columns:
+            db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN contact_person VARCHAR(200)"))
+            results.append('✅ Added: lab_request.contact_person')
+            print("  ✅ Adding column: contact_person")
+        else:
+            results.append('⏭️  Already exists: lab_request.contact_person')
+            print("  ⏭️  Column already exists: contact_person")
+        
+        if 'contact_phone' not in lab_request_columns:
+            db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN contact_phone VARCHAR(50)"))
+            results.append('✅ Added: lab_request.contact_phone')
+            print("  ✅ Adding column: contact_phone")
+        else:
+            results.append('⏭️  Already exists: lab_request.contact_phone')
+            print("  ⏭️  Column already exists: contact_phone")
+        
+        # Migrate Department table
+        print("\n🏢 Migrating Department table...")
+        
+        if 'sample_pickup_address' not in department_columns:
+            db.session.execute(db.text("ALTER TABLE department ADD COLUMN sample_pickup_address VARCHAR(500)"))
+            results.append('✅ Added: department.sample_pickup_address')
+            print("  ✅ Adding column: sample_pickup_address")
+        else:
+            results.append('⏭️  Already exists: department.sample_pickup_address')
+            print("  ⏭️  Column already exists: sample_pickup_address")
+        
+        if 'sample_pickup_contact' not in department_columns:
+            db.session.execute(db.text("ALTER TABLE department ADD COLUMN sample_pickup_contact VARCHAR(200)"))
+            results.append('✅ Added: department.sample_pickup_contact')
+            print("  ✅ Adding column: sample_pickup_contact")
+        else:
+            results.append('⏭️  Already exists: department.sample_pickup_contact')
+            print("  ⏭️  Column already exists: sample_pickup_contact")
+        
+        db.session.commit()
+        
+        print("\n✅ Migration completed successfully!")
+        print("\n📝 Changes made:")
+        print("   - LabRequest: sampling_address, contact_person, contact_phone")
+        print("   - Department: sample_pickup_address, sample_pickup_contact")
+        
+        return jsonify({
+            'message': '✅ Migration v2 completed successfully!',
+            'changes': results
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        error_msg = f'❌ Migration failed: {str(e)}'
+        print(error_msg)
+        return jsonify({'message': error_msg, 'error': str(e)}), 500
+
 if __name__ == '__main__':
     init_db()
+    
+    # Auto-migration: Automatically apply schema changes
+    print("\n🔄 Checking for database migrations...")
+    auto_migrate()
+    
     print("\n🚀 Backend starting...")
     print("📊 API endpoint: /api/stats")
     print("\n🆕 v6.6 features:")
     print("   📁 Categories")
     print("   📎 File attachments (max 20 MB)")
     print("   🏢 Company logo")
-    print("   🎨 Color-coded test types\n")
+    print("   🎨 Color-coded test types")
+    print("\n🆕 v6.6 ENHANCED v2:")
+    print("   📍 Sampling address & contact details")
+    print("   🏢 Department sample pickup info")
+    print("   📅 Optional deadline")
+    print("   🎯 Auto-scroll to validation errors\n")
     
     # v6.6 Production: Use PORT from environment
     port = int(os.environ.get('PORT', 5000))
