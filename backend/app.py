@@ -1426,13 +1426,50 @@ def init_db():
 def auto_migrate():
     """
     Automatic migration that runs on app startup
-    Checks and adds missing columns without requiring manual intervention
+    Uses the migration framework from migrations.py
+    """
+    try:
+        from sqlalchemy import inspect
+        from migrations import apply_migrations
+        
+        print("  📋 Running schema migrations...")
+        inspector = inspect(db.engine)
+        
+        # Apply all pending migrations from migrations.py
+        success, applied, errors = apply_migrations(db, inspector)
+        
+        if applied:
+            print(f"\n✅ Auto-migration completed! Applied {len(applied)} changes:")
+            for mig in applied:
+                print(f"   - {mig['table']}.{mig['column']}: {mig['description']}")
+        else:
+            print("✅ Database schema is up to date (no migrations needed)")
+        
+        if errors:
+            print(f"\n⚠️  {len(errors)} errors occurred:")
+            for error in errors:
+                print(f"   {error}")
+        
+        return success
+        
+    except ImportError:
+        # Fallback to inline migrations if migrations.py not found
+        print("  ⚠️  migrations.py not found, using inline migrations")
+        return auto_migrate_inline()
+    except Exception as e:
+        db.session.rollback()
+        print(f"⚠️  Auto-migration failed: {e}")
+        print("   Application will continue, but some features may not work correctly.")
+        return False
+
+def auto_migrate_inline():
+    """
+    Inline migration fallback (for backward compatibility)
     """
     try:
         from sqlalchemy import inspect
         inspector = inspect(db.engine)
         
-        # Get existing columns
         lab_request_columns = [col['name'] for col in inspector.get_columns('lab_request')]
         department_columns = [col['name'] for col in inspector.get_columns('department')]
         
@@ -1442,44 +1479,69 @@ def auto_migrate():
         if 'sampling_address' not in lab_request_columns:
             db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN sampling_address VARCHAR(500)"))
             migrations_applied.append('lab_request.sampling_address')
-            print("  🔄 Auto-migration: Added sampling_address to lab_request")
+            print("  🔄 Added sampling_address to lab_request")
         
         if 'contact_person' not in lab_request_columns:
             db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN contact_person VARCHAR(200)"))
             migrations_applied.append('lab_request.contact_person')
-            print("  🔄 Auto-migration: Added contact_person to lab_request")
+            print("  🔄 Added contact_person to lab_request")
         
         if 'contact_phone' not in lab_request_columns:
             db.session.execute(db.text("ALTER TABLE lab_request ADD COLUMN contact_phone VARCHAR(50)"))
             migrations_applied.append('lab_request.contact_phone')
-            print("  🔄 Auto-migration: Added contact_phone to lab_request")
+            print("  🔄 Added contact_phone to lab_request")
         
         # Department migrations
         if 'sample_pickup_address' not in department_columns:
             db.session.execute(db.text("ALTER TABLE department ADD COLUMN sample_pickup_address VARCHAR(500)"))
             migrations_applied.append('department.sample_pickup_address')
-            print("  🔄 Auto-migration: Added sample_pickup_address to department")
+            print("  🔄 Added sample_pickup_address to department")
         
         if 'sample_pickup_contact' not in department_columns:
             db.session.execute(db.text("ALTER TABLE department ADD COLUMN sample_pickup_contact VARCHAR(200)"))
             migrations_applied.append('department.sample_pickup_contact')
-            print("  🔄 Auto-migration: Added sample_pickup_contact to department")
+            print("  🔄 Added sample_pickup_contact to department")
         
         if migrations_applied:
             db.session.commit()
-            print(f"✅ Auto-migration completed! Applied {len(migrations_applied)} changes:")
-            for migration in migrations_applied:
-                print(f"   - {migration}")
-        else:
-            print("✅ Database schema is up to date (no migrations needed)")
+            print(f"✅ Applied {len(migrations_applied)} migrations")
         
         return True
         
     except Exception as e:
         db.session.rollback()
-        print(f"⚠️  Auto-migration failed: {e}")
-        print("   Application will continue, but some features may not work correctly.")
+        print(f"⚠️  Inline migration failed: {e}")
         return False
+
+# Global flag to track initialization
+_app_initialized = False
+
+@app.before_request
+def ensure_initialized():
+    """
+    Automatic initialization check on first request
+    This ensures data exists even when running with Gunicorn (Railway production)
+    """
+    global _app_initialized
+    
+    if _app_initialized:
+        return
+    
+    try:
+        # Check if we need to initialize
+        with app.app_context():
+            # Check if categories exist
+            if RequestCategory.query.count() == 0:
+                print("\n🔄 Auto-initializing database (first request)...")
+                print("   Reason: No categories found in database")
+                init_db()
+                print("✅ Auto-initialization completed!")
+            
+        _app_initialized = True
+        
+    except Exception as e:
+        print(f"⚠️  Auto-initialization failed: {e}")
+        _app_initialized = True  # Don't try again
 
 @app.route('/api/init', methods=['GET'])
 def initialize_database():
@@ -1489,6 +1551,63 @@ def initialize_database():
         return jsonify({"message": "✅ Database initialized successfully!"}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/reset-data', methods=['POST'])
+@token_required
+def reset_data_endpoint(current_user):
+    """
+    Reset and reinitialize all data (categories, test types, departments, etc.)
+    Only super_admin can run this
+    WARNING: This will DELETE all existing data!
+    """
+    if current_user.role != 'super_admin':
+        return jsonify({'message': '⛔ Nincs jogosultságod! Csak super_admin futtathatja.'}), 403
+    
+    try:
+        print("\n🔄 Resetting database data...")
+        
+        # Delete all data (except users and companies)
+        from sqlalchemy import text
+        
+        # Delete in correct order (foreign keys)
+        print("  🗑️  Deleting lab requests...")
+        db.session.execute(text("DELETE FROM lab_request"))
+        
+        print("  🗑️  Deleting test types...")
+        db.session.execute(text("DELETE FROM test_type"))
+        
+        print("  🗑️  Deleting categories...")
+        db.session.execute(text("DELETE FROM request_category"))
+        
+        print("  🗑️  Deleting departments...")
+        db.session.execute(text("DELETE FROM department"))
+        
+        db.session.commit()
+        print("  ✅ Old data deleted")
+        
+        # Now reinitialize (this will recreate everything)
+        print("\n🔄 Reinitializing data...")
+        init_db()
+        
+        # Count results
+        categories_count = RequestCategory.query.count()
+        test_types_count = TestType.query.count()
+        departments_count = Department.query.count()
+        
+        return jsonify({
+            'message': '✅ Data reset completed successfully!',
+            'data': {
+                'categories': categories_count,
+                'test_types': test_types_count,
+                'departments': departments_count
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        error_msg = f'❌ Data reset failed: {str(e)}'
+        print(error_msg)
+        return jsonify({'message': error_msg, 'error': str(e)}), 500
 
 @app.route('/api/migrate-v2', methods=['POST'])
 @token_required
@@ -1578,6 +1697,7 @@ def migrate_v2_endpoint(current_user):
         return jsonify({'message': error_msg, 'error': str(e)}), 500
 
 if __name__ == '__main__':
+    # Local development mode - init everything
     init_db()
     
     # Auto-migration: Automatically apply schema changes
@@ -1601,3 +1721,20 @@ if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'False') == 'True'
     app.run(host='0.0.0.0', port=port, debug=debug)
+else:
+    # Production mode (Gunicorn) - init on first import
+    print("\n🔄 Production mode: Running auto-initialization...")
+    with app.app_context():
+        # Create tables if they don't exist
+        db.create_all()
+        
+        # Run migrations
+        print("🔄 Checking for database migrations...")
+        auto_migrate()
+        
+        # Initialize data if needed
+        if RequestCategory.query.count() == 0:
+            print("🔄 No data found, initializing database...")
+            init_db()
+            print("✅ Database initialized!")
+    print("✅ Production initialization complete!\n")
