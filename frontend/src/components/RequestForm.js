@@ -428,22 +428,56 @@ function RequestForm() {
             const isCollapsed = collapsedCategories[category.id];
             const isSamplePrep = category.name === 'Minta előkészítés';
 
+            // Helper function to get complementary light background
+            const getCategoryBackground = (color) => {
+              // Convert hex to RGB and create a very light complementary tint
+              const hex = color.replace('#', '');
+              const r = parseInt(hex.substr(0, 2), 16);
+              const g = parseInt(hex.substr(2, 2), 16);
+              const b = parseInt(hex.substr(4, 2), 16);
+              
+              // Create a very light version (95% white + 5% color)
+              return `rgba(${r}, ${g}, ${b}, 0.03)`;
+            };
+
+            const getCategoryHeaderBg = (color) => {
+              const hex = color.replace('#', '');
+              const r = parseInt(hex.substr(0, 2), 16);
+              const g = parseInt(hex.substr(2, 2), 16);
+              const b = parseInt(hex.substr(4, 2), 16);
+              
+              // Slightly more intense for header (92% white + 8% color)
+              return `rgba(${r}, ${g}, ${b}, 0.08)`;
+            };
+
             return (
               <div 
                 key={category.id} 
-                className={`border-2 rounded-lg ${isSamplePrep ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200'}`}
+                className={`border-2 rounded-lg overflow-hidden transition-all duration-300 ease-in-out ${
+                  isSamplePrep ? 'border-indigo-400 shadow-md' : 'border-gray-200'
+                }`}
+                style={{
+                  backgroundColor: getCategoryBackground(category.color)
+                }}
               >
                 {/* Category Header - Clickable to toggle */}
                 <div 
                   onClick={() => toggleCategory(category.id)}
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="flex items-center justify-between p-4 cursor-pointer transition-all duration-200 ease-in-out"
                   style={{ 
-                    borderBottom: isCollapsed ? 'none' : `2px solid ${category.color}20`
+                    backgroundColor: getCategoryHeaderBg(category.color),
+                    borderBottom: isCollapsed ? 'none' : `2px solid ${category.color}30`
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = getCategoryHeaderBg(category.color).replace('0.08', '0.12');
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = getCategoryHeaderBg(category.color);
                   }}
                 >
                   <div className="flex items-center gap-3">
                     <Icon 
-                      className="w-6 h-6" 
+                      className="w-6 h-6 transition-transform duration-200" 
                       style={{ color: category.color }}
                     />
                     <div>
@@ -468,38 +502,60 @@ function RequestForm() {
                       {categoryTests.length} vizsgálat
                     </span>
                     {isCollapsed ? (
-                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                      <ChevronDown className="w-5 h-5 text-gray-400 transition-transform duration-300" />
                     ) : (
-                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                      <ChevronUp className="w-5 h-5 text-gray-400 transition-transform duration-300" />
                     )}
                   </div>
                 </div>
 
-                {/* Category Tests - Collapsible */}
-                {!isCollapsed && (
+                {/* Category Tests - Collapsible with smooth animation */}
+                <div 
+                  className={`transition-all duration-300 ease-in-out overflow-hidden ${
+                    isCollapsed ? 'max-h-0 opacity-0' : 'max-h-[2000px] opacity-100'
+                  }`}
+                >
                   <div className="p-4 space-y-2">
                     {categoryTests.map((testType) => (
                       <label
                         key={testType.id}
-                        className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                        className="flex items-center p-3 border rounded-lg cursor-pointer transition-all duration-150 ease-in-out"
+                        style={{
+                          borderColor: `${category.color}20`,
+                          backgroundColor: 'white'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = getCategoryBackground(category.color).replace('0.03', '0.08');
+                          e.currentTarget.style.borderColor = `${category.color}40`;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'white';
+                          e.currentTarget.style.borderColor = `${category.color}20`;
+                        }}
                       >
                         <input
                           type="checkbox"
                           checked={selectedTests.includes(testType.id)}
                           onChange={() => toggleTestType(testType.id)}
-                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          className="w-4 h-4 border-gray-300 rounded focus:ring-2 transition-all"
+                          style={{
+                            accentColor: category.color
+                          }}
                         />
                         <div className="ml-3 flex-1">
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-gray-900">{testType.name}</span>
-                            <span className="text-sm font-semibold text-indigo-600">
+                            <span 
+                              className="text-sm font-semibold"
+                              style={{ color: category.color }}
+                            >
                               {testType.price.toLocaleString('hu-HU')} Ft
                             </span>
                           </div>
                           {testType.description && (
                             <p className="text-sm text-gray-500 mt-1">{testType.description}</p>
                           )}
-                          {testType.turnaround_days && (
+                          {testType.turnaround_days !== null && testType.turnaround_days !== undefined && (
                             <p className="text-xs text-gray-400 mt-1">
                               Átfutási idő: {testType.turnaround_days} nap
                             </p>
@@ -508,7 +564,7 @@ function RequestForm() {
                       </label>
                     ))}
                   </div>
-                )}
+                </div>
               </div>
             );
           })}

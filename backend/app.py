@@ -1219,6 +1219,7 @@ def init_db():
         # Create departments
         if Department.query.count() == 0:
             departments = [
+                Department(name='Minta Előkészítő', description='Mintavétel, homogenizálás, előkészítés', contact_person='Szabó Katalin', contact_email='szabo@pannon.hu'),
                 Department(name='Kémiai Labor', description='Általános kémiai analitika', contact_person='Dr. Kovács István', contact_email='kovacs@pannon.hu'),
                 Department(name='Olajipar Szaklabor', description='Ásványolaj és származékok vizsgálata', contact_person='Dr. Nagy Éva', contact_email='nagy@pannon.hu'),
                 Department(name='Környezetvédelmi Labor', description='Környezeti minták elemzése', contact_person='Dr. Tóth Péter', contact_email='toth@pannon.hu'),
@@ -1242,65 +1243,71 @@ def init_db():
             cat_korrozio = RequestCategory.query.filter_by(name='Korrózió és kompatibilitás').first().id
             
             test_types = [
-                # MINTA ELŐKÉSZÍTÉS - FIX ELSŐ KATEGÓRIA
-                TestType(name='Minta homogenizálás', description='Teljes minta alapos keverése, homogenizálása', price=3000, category_id=cat_minta, department_id=1, turnaround_days=1),
-                TestType(name='Minta konzerválás', description='Minta stabilizálása, konzerválása tároláshoz', price=2500, category_id=cat_minta, department_id=1, turnaround_days=1),
+                # MINTA ELŐKÉSZÍTÉS - FIX ELSŐ KATEGÓRIA (0 Ft, 0 nap, tény alapon)
+                TestType(
+                    name='Minta előkészítés', 
+                    description='Minta függvényében, tény alapon kerül elszámolásra', 
+                    price=0, 
+                    category_id=cat_minta, 
+                    department_id=1,  # Minta Előkészítő (ID=1)
+                    turnaround_days=0
+                ),
                 
                 # NYERSOLAJ VIZSGÁLATOK
-                TestType(name='API fajsúly', description='Nyersolaj sűrűségének API egységekben', price=8000, category_id=cat_nyersolaj, department_id=2, turnaround_days=2),
-                TestType(name='Kéntartalom (nyersolaj)', description='Összes kéntartalom ASTM D4294 szerint', price=12000, category_id=cat_nyersolaj, department_id=1, turnaround_days=5),
-                TestType(name='Aszfaltén tartalom', description='N-heptán oldhatatlan frakció', price=15000, category_id=cat_nyersolaj, department_id=2, turnaround_days=7),
-                TestType(name='Pour point (ömléspont)', description='Minimális folyási hőmérséklet', price=9000, category_id=cat_nyersolaj, department_id=2, turnaround_days=3),
-                TestType(name='Paraffinvax tartalom', description='Szilárd paraffin koncentráció', price=13000, category_id=cat_nyersolaj, department_id=2, turnaround_days=5),
+                TestType(name='API fajsúly', description='Nyersolaj sűrűségének API egységekben', price=8000, category_id=cat_nyersolaj, department_id=3, turnaround_days=2),
+                TestType(name='Kéntartalom (nyersolaj)', description='Összes kéntartalom ASTM D4294 szerint', price=12000, category_id=cat_nyersolaj, department_id=2, turnaround_days=5),
+                TestType(name='Aszfaltén tartalom', description='N-heptán oldhatatlan frakció', price=15000, category_id=cat_nyersolaj, department_id=3, turnaround_days=7),
+                TestType(name='Pour point (ömléspont)', description='Minimális folyási hőmérséklet', price=9000, category_id=cat_nyersolaj, department_id=3, turnaround_days=3),
+                TestType(name='Paraffinvax tartalom', description='Szilárd paraffin koncentráció', price=13000, category_id=cat_nyersolaj, department_id=3, turnaround_days=5),
                 
                 # FINOMÍTOTT TERMÉKEK (Benzin, Dízel, Fűtőolaj)
-                TestType(name='Oktánszám (RON/MON)', description='Benzin kopogásállóság vizsgálat', price=18000, category_id=cat_finomitott, department_id=2, turnaround_days=4),
-                TestType(name='Cetánszám', description='Dízel öngyulladási jellemző', price=20000, category_id=cat_finomitott, department_id=2, turnaround_days=5),
-                TestType(name='Lepárlási görbe', description='ASTM D86 desztilláció', price=16000, category_id=cat_finomitott, department_id=2, turnaround_days=6),
-                TestType(name='RVP (Reid-gőznyomás)', description='Benzin illékonyság 37.8°C-on', price=10000, category_id=cat_finomitott, department_id=2, turnaround_days=3),
-                TestType(name='Benzol tartalom', description='Aromás szénhidrogén koncentráció', price=14000, category_id=cat_finomitott, department_id=1, turnaround_days=5),
-                TestType(name='Oxigéntartalom', description='Oxigén-vegyületek mennyisége', price=12000, category_id=cat_finomitott, department_id=1, turnaround_days=4),
-                TestType(name='Dermedéspont', description='ASTM D97 mérés', price=9000, category_id=cat_finomitott, department_id=2, turnaround_days=3),
-                TestType(name='Hideg szűrhetőségi határérték (CFPP)', description='Dízel téli használhatóság', price=11000, category_id=cat_finomitott, department_id=2, turnaround_days=4),
-                TestType(name='Felhőpont', description='Paraffinok kikristályosodása', price=8500, category_id=cat_finomitott, department_id=2, turnaround_days=3),
-                TestType(name='Lobbanáspont', description='Tűzvédelmi jellemző meghatározás', price=7000, category_id=cat_finomitott, department_id=2, turnaround_days=2),
+                TestType(name='Oktánszám (RON/MON)', description='Benzin kopogásállóság vizsgálat', price=18000, category_id=cat_finomitott, department_id=3, turnaround_days=4),
+                TestType(name='Cetánszám', description='Dízel öngyulladási jellemző', price=20000, category_id=cat_finomitott, department_id=3, turnaround_days=5),
+                TestType(name='Lepárlási görbe', description='ASTM D86 desztilláció', price=16000, category_id=cat_finomitott, department_id=3, turnaround_days=6),
+                TestType(name='RVP (Reid-gőznyomás)', description='Benzin illékonyság 37.8°C-on', price=10000, category_id=cat_finomitott, department_id=3, turnaround_days=3),
+                TestType(name='Benzol tartalom', description='Aromás szénhidrogén koncentráció', price=14000, category_id=cat_finomitott, department_id=2, turnaround_days=5),
+                TestType(name='Oxigéntartalom', description='Oxigén-vegyületek mennyisége', price=12000, category_id=cat_finomitott, department_id=2, turnaround_days=4),
+                TestType(name='Dermedéspont', description='ASTM D97 mérés', price=9000, category_id=cat_finomitott, department_id=3, turnaround_days=3),
+                TestType(name='Hideg szűrhetőségi határérték (CFPP)', description='Dízel téli használhatóság', price=11000, category_id=cat_finomitott, department_id=3, turnaround_days=4),
+                TestType(name='Felhőpont', description='Paraffinok kikristályosodása', price=8500, category_id=cat_finomitott, department_id=3, turnaround_days=3),
+                TestType(name='Lobbanáspont', description='Tűzvédelmi jellemző meghatározás', price=7000, category_id=cat_finomitott, department_id=3, turnaround_days=2),
                 
                 # KENŐANYAGOK
-                TestType(name='Viszkozitás (40°C és 100°C)', description='Kinematikai viszkozitás meghatározás', price=15000, category_id=cat_kenoanyag, department_id=2, turnaround_days=3),
-                TestType(name='Viszkozitási index (VI)', description='Viszkozitás hőmérsékletfüggése', price=12000, category_id=cat_kenoanyag, department_id=2, turnaround_days=3),
-                TestType(name='TBN (Teljes bázikus szám)', description='Savsemlegesítő képesség', price=13000, category_id=cat_kenoanyag, department_id=1, turnaround_days=4),
-                TestType(name='TAN (Teljes savas szám)', description='Oxidáció, szennyeződés mértéke', price=11000, category_id=cat_kenoanyag, department_id=1, turnaround_days=4),
-                TestType(name='Noack párolgás', description='Kenőolaj párolgási vesztesége 250°C', price=17000, category_id=cat_kenoanyag, department_id=2, turnaround_days=5),
-                TestType(name='Oxidációs stabilitás (RPVOT)', description='Forgónyomás oxigén teszt', price=19000, category_id=cat_kenoanyag, department_id=2, turnaround_days=6),
-                TestType(name='Kopásvédelem (Four-ball)', description='Négygolyós kopásvizsgálat', price=16000, category_id=cat_kenoanyag, department_id=2, turnaround_days=5),
+                TestType(name='Viszkozitás (40°C és 100°C)', description='Kinematikai viszkozitás meghatározás', price=15000, category_id=cat_kenoanyag, department_id=3, turnaround_days=3),
+                TestType(name='Viszkozitási index (VI)', description='Viszkozitás hőmérsékletfüggése', price=12000, category_id=cat_kenoanyag, department_id=3, turnaround_days=3),
+                TestType(name='TBN (Teljes bázikus szám)', description='Savsemlegesítő képesség', price=13000, category_id=cat_kenoanyag, department_id=2, turnaround_days=4),
+                TestType(name='TAN (Teljes savas szám)', description='Oxidáció, szennyeződés mértéke', price=11000, category_id=cat_kenoanyag, department_id=2, turnaround_days=4),
+                TestType(name='Noack párolgás', description='Kenőolaj párolgási vesztesége 250°C', price=17000, category_id=cat_kenoanyag, department_id=3, turnaround_days=5),
+                TestType(name='Oxidációs stabilitás (RPVOT)', description='Forgónyomás oxigén teszt', price=19000, category_id=cat_kenoanyag, department_id=3, turnaround_days=6),
+                TestType(name='Kopásvédelem (Four-ball)', description='Négygolyós kopásvizsgálat', price=16000, category_id=cat_kenoanyag, department_id=3, turnaround_days=5),
                 
                 # BIODÍZEL ÉS BIOÜZEMANYAGOK
-                TestType(name='Észtartalom (FAME)', description='Zsírsav-metil-észter koncentráció', price=14000, category_id=cat_biodiesel, department_id=1, turnaround_days=5),
-                TestType(name='Glicerin tartalom', description='Szabad és teljes glicerin', price=13000, category_id=cat_biodiesel, department_id=1, turnaround_days=5),
-                TestType(name='Metanol tartalom', description='Maradék metanol GC-vel', price=12000, category_id=cat_biodiesel, department_id=1, turnaround_days=4),
-                TestType(name='Jódszám', description='Telítetlenség mértéke', price=10000, category_id=cat_biodiesel, department_id=1, turnaround_days=4),
-                TestType(name='Oxidációs stabilitás (Rancimat)', description='110°C-on induktív periódus', price=15000, category_id=cat_biodiesel, department_id=2, turnaround_days=6),
+                TestType(name='Észtartalom (FAME)', description='Zsírsav-metil-észter koncentráció', price=14000, category_id=cat_biodiesel, department_id=2, turnaround_days=5),
+                TestType(name='Glicerin tartalom', description='Szabad és teljes glicerin', price=13000, category_id=cat_biodiesel, department_id=2, turnaround_days=5),
+                TestType(name='Metanol tartalom', description='Maradék metanol GC-vel', price=12000, category_id=cat_biodiesel, department_id=2, turnaround_days=4),
+                TestType(name='Jódszám', description='Telítetlenség mértéke', price=10000, category_id=cat_biodiesel, department_id=2, turnaround_days=4),
+                TestType(name='Oxidációs stabilitás (Rancimat)', description='110°C-on induktív periódus', price=15000, category_id=cat_biodiesel, department_id=3, turnaround_days=6),
                 
                 # ADDITÍVOK ÉS ADALÉKANYAGOK
-                TestType(name='Adalékanyag koncentráció', description='Dózoló adalék pontos mennyisége', price=16000, category_id=cat_additivok, department_id=1, turnaround_days=5),
-                TestType(name='Detergens hatóanyag', description='Tisztító adalék aktivitás', price=14000, category_id=cat_additivok, department_id=1, turnaround_days=5),
-                TestType(name='Antioxidáns hatóanyag', description='Oxidációgátló koncentráció', price=13000, category_id=cat_additivok, department_id=1, turnaround_days=4),
+                TestType(name='Adalékanyag koncentráció', description='Dózoló adalék pontos mennyisége', price=16000, category_id=cat_additivok, department_id=2, turnaround_days=5),
+                TestType(name='Detergens hatóanyag', description='Tisztító adalék aktivitás', price=14000, category_id=cat_additivok, department_id=2, turnaround_days=5),
+                TestType(name='Antioxidáns hatóanyag', description='Oxidációgátló koncentráció', price=13000, category_id=cat_additivok, department_id=2, turnaround_days=4),
                 
                 # KÖRNYEZETVÉDELEM
-                TestType(name='TPH (Összes szénhidrogén)', description='Talaj/víz olajszennyezettség', price=18000, category_id=cat_kornyezet, department_id=3, turnaround_days=7),
-                TestType(name='PAH (Poliaromás szénhidrogének)', description='EPA 16 PAH komponens', price=25000, category_id=cat_kornyezet, department_id=3, turnaround_days=10),
-                TestType(name='BTEX', description='Benzol, Toluol, Etilbenzol, Xilol', price=20000, category_id=cat_kornyezet, department_id=3, turnaround_days=7),
-                TestType(name='Nehézfém tartalom', description='ICP-MS módszerrel', price=22000, category_id=cat_kornyezet, department_id=3, turnaround_days=8),
+                TestType(name='TPH (Összes szénhidrogén)', description='Talaj/víz olajszennyezettség', price=18000, category_id=cat_kornyezet, department_id=4, turnaround_days=7),
+                TestType(name='PAH (Poliaromás szénhidrogének)', description='EPA 16 PAH komponens', price=25000, category_id=cat_kornyezet, department_id=4, turnaround_days=10),
+                TestType(name='BTEX', description='Benzol, Toluol, Etilbenzol, Xilol', price=20000, category_id=cat_kornyezet, department_id=4, turnaround_days=7),
+                TestType(name='Nehézfém tartalom', description='ICP-MS módszerrel', price=22000, category_id=cat_kornyezet, department_id=4, turnaround_days=8),
                 
                 # GÁZOK
-                TestType(name='Gázösszetétel (GC)', description='PB-gáz, földgáz komponens analízis', price=16000, category_id=cat_gazok, department_id=1, turnaround_days=5),
-                TestType(name='Fűtőérték', description='Égéshő meghatározás bomba kalorimetriával', price=12000, category_id=cat_gazok, department_id=2, turnaround_days=4),
-                TestType(name='H₂S tartalom', description='Kénhidrogén koncentráció', price=10000, category_id=cat_gazok, department_id=1, turnaround_days=3),
+                TestType(name='Gázösszetétel (GC)', description='PB-gáz, földgáz komponens analízis', price=16000, category_id=cat_gazok, department_id=2, turnaround_days=5),
+                TestType(name='Fűtőérték', description='Égéshő meghatározás bomba kalorimetriával', price=12000, category_id=cat_gazok, department_id=3, turnaround_days=4),
+                TestType(name='H₂S tartalom', description='Kénhidrogén koncentráció', price=10000, category_id=cat_gazok, department_id=2, turnaround_days=3),
                 
                 # KORRÓZIÓ ÉS KOMPATIBILITÁS
-                TestType(name='Réz korróziós teszt', description='ASTM D130 rézkorrózió', price=9000, category_id=cat_korrozio, department_id=2, turnaround_days=3),
-                TestType(name='Kompatibilitási vizsgálat', description='Üzemanyag keverhetőség teszt', price=15000, category_id=cat_korrozio, department_id=2, turnaround_days=5),
-                TestType(name='Víztartalom (Karl Fischer)', description='Pontos vízmeghatározás titrálással', price=8000, category_id=cat_korrozio, department_id=1, turnaround_days=2),
+                TestType(name='Réz korróziós teszt', description='ASTM D130 rézkorrózió', price=9000, category_id=cat_korrozio, department_id=3, turnaround_days=3),
+                TestType(name='Kompatibilitási vizsgálat', description='Üzemanyag keverhetőség teszt', price=15000, category_id=cat_korrozio, department_id=3, turnaround_days=5),
+                TestType(name='Víztartalom (Karl Fischer)', description='Pontos vízmeghatározás titrálással', price=8000, category_id=cat_korrozio, department_id=2, turnaround_days=2),
             ]
             for tt in test_types:
                 db.session.add(tt)
@@ -1394,89 +1401,6 @@ def init_db():
             print("✅ Példa laborkérések létrehozva!")
         
         print("\n🎉 Adatbázis inicializálva!")
-
-@app.route('/api/migrate', methods=['GET'])
-def run_migration():
-    """Database migration endpoint - adds icon column if missing"""
-    try:
-        with app.app_context():
-            # Check if icon column exists
-            from sqlalchemy import inspect
-            inspector = inspect(db.engine)
-            columns = [col['name'] for col in inspector.get_columns('request_category')]
-            
-            if 'icon' in columns:
-                return jsonify({"message": "✅ Column 'icon' already exists!"}), 200
-            
-            # Add icon column using raw SQL (works for both SQLite and PostgreSQL)
-            with db.engine.connect() as conn:
-                # PostgreSQL / SQLite compatible
-                conn.execute(db.text("""
-                    ALTER TABLE request_category 
-                    ADD COLUMN icon VARCHAR(50) DEFAULT 'Beaker'
-                """))
-                conn.commit()
-            
-            # Update existing categories
-            categories_to_update = [
-                ('Minta előkészítés', 'Package'),
-                ('Nyersolaj vizsgálatok', 'Droplet'),
-                ('Finomított termékek', 'Fuel'),
-                ('Kenőanyagok', 'Droplets'),
-                ('Biodízel és bioüzemanyagok', 'Leaf'),
-                ('Additívok', 'Beaker'),
-                ('Környezetvédelem', 'TreePine'),
-                ('Gázok', 'Wind'),
-                ('Korrózió és kompatibilitás', 'AlertTriangle'),
-            ]
-            
-            for name, icon in categories_to_update:
-                cat = RequestCategory.query.filter_by(name=name).first()
-                if cat:
-                    cat.icon = icon
-            
-            db.session.commit()
-            
-            return jsonify({
-                "message": "✅ Migration completed successfully!",
-                "details": "Added 'icon' column to request_category table"
-            }), 200
-            
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/reset-data', methods=['POST'])
-def reset_test_data():
-    """
-    DANGER: Törli az ÖSSZES tesztadatot és újrainicializálja v6.7-tel!
-    Csak POST metódus védelem miatt
-    """
-    try:
-        with app.app_context():
-            # DELETE old data
-            LabRequest.query.delete()
-            TestType.query.delete()
-            RequestCategory.query.delete()
-            Department.query.delete()
-            User.query.delete()
-            Company.query.delete()
-            db.session.commit()
-            
-            # INIT new data (call existing init_db logic)
-            init_db()
-            
-            return jsonify({
-                "message": "✅ Data reset completed!",
-                "categories": RequestCategory.query.count(),
-                "test_types": TestType.query.count(),
-                "departments": Department.query.count(),
-                "companies": Company.query.count(),
-                "users": User.query.count()
-            }), 200
-            
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/init', methods=['GET'])
 def initialize_database():

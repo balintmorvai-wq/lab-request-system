@@ -141,13 +141,14 @@ function Login() {
           </div>
 
           {/* Footer with MOL Partner */}
-          <div className="bg-gray-50 px-8 py-4 border-t border-gray-100">
-            <div className="flex items-center justify-center gap-3">
-              <p className="text-xs text-gray-500">Együttműködő partner:</p>
+          <div className="bg-gray-50 px-8 py-6 border-t border-gray-100">
+            <div className="flex flex-col items-center justify-center gap-2">
+              <p className="text-xs text-gray-500 font-medium">Együttműködő partner:</p>
               <img 
                 src="/mol-logo.png" 
                 alt="MOL Group" 
-                className="h-6 w-auto opacity-80"
+                className="h-12 w-auto"
+                style={{ opacity: 0.9 }}
               />
             </div>
           </div>
