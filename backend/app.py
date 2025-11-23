@@ -671,7 +671,6 @@ def create_request(current_user):
     new_request = LabRequest(
         user_id=current_user.id,
         company_id=current_user.company_id,
-        category_id=data.get('category_id'),
         sample_id=data.get('sample_id'),
         sample_description=data.get('sample_description'),
         test_types=json.dumps(test_type_ids),
@@ -809,8 +808,6 @@ def update_request(current_user, request_id):
         req.sample_id = data['sample_id']
     if 'sample_description' in data:
         req.sample_description = data['sample_description']
-    if 'category_id' in data:
-        req.category_id = data['category_id'] if data['category_id'] else None
     if 'urgency' in data:
         req.urgency = data['urgency']
     if 'sampling_location' in data:

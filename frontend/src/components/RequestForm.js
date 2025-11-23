@@ -9,7 +9,6 @@ import {
   FileText,
   Save,
   Send,
-  Tag,
   Paperclip,
   X,
   AlertTriangle
@@ -23,7 +22,6 @@ function RequestForm() {
   const [testTypes, setTestTypes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedTests, setSelectedTests] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('');
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [existingAttachment, setExistingAttachment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -77,7 +75,6 @@ function RequestForm() {
       });
       
       setSelectedTests(req.test_types.map(tt => tt.id));
-      setSelectedCategory(req.category_id || '');
       setExistingAttachment(req.attachment_filename || '');
       setOriginalStatus(req.status);  // v6.6 track if it was rejected
     } catch (error) {
@@ -160,11 +157,6 @@ function RequestForm() {
       return;
     }
 
-    if (!selectedCategory) {
-      alert('Kérlek válassz kategóriát!');
-      return;
-    }
-
     if (selectedTests.length === 0) {
       alert('Kérlek válassz ki legalább egy vizsgálattípust!');
       return;
@@ -191,7 +183,6 @@ function RequestForm() {
       const formDataObj = new FormData();
       formDataObj.append('sample_id', formData.sample_id);
       formDataObj.append('sample_description', formData.sample_description);
-      formDataObj.append('category_id', selectedCategory);
       formDataObj.append('urgency', formData.urgency);
       formDataObj.append('sampling_location', formData.sampling_location);
       formDataObj.append('sampling_date', formData.sampling_date);
@@ -284,33 +275,6 @@ function RequestForm() {
                 required
                 placeholder="pl. MOL-2024-003"
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Kategória *
-              </label>
-              <div className="relative">
-                <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
-                >
-                  <option value="">Válassz kategóriát</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {selectedCategory && categories.find(c => c.id === parseInt(selectedCategory)) && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {categories.find(c => c.id === parseInt(selectedCategory)).description}
-                </p>
-              )}
             </div>
           </div>
 
