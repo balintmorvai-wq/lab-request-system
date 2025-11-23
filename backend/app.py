@@ -84,6 +84,8 @@ class Department(db.Model):
     description = db.Column(db.Text)
     contact_person = db.Column(db.String(100))
     contact_email = db.Column(db.String(120))
+    sample_pickup_address = db.Column(db.String(500))  # ÚJ: Mintaátvétel pontos címe
+    sample_pickup_contact = db.Column(db.String(200))  # ÚJ: Mintaátvétel kontakt személy
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -124,8 +126,11 @@ class LabRequest(db.Model):
     urgency = db.Column(db.String(50))
     status = db.Column(db.String(50), default='draft')
     sampling_location = db.Column(db.String(200))
+    sampling_address = db.Column(db.String(500))      # ÚJ: Pontos cím
+    contact_person = db.Column(db.String(200))        # ÚJ: Kontakt személy
+    contact_phone = db.Column(db.String(50))          # ÚJ: Telefon
     sampling_date = db.Column(db.DateTime)
-    deadline = db.Column(db.DateTime)
+    deadline = db.Column(db.DateTime, nullable=True)  # NULLABLE!
     special_instructions = db.Column(db.Text)
     attachment_filename = db.Column(db.String(200))
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
@@ -605,6 +610,9 @@ def get_requests(current_user):
         'urgency': req.urgency,
         'status': req.status,
         'sampling_location': req.sampling_location,
+        'sampling_address': req.sampling_address,             # ÚJ
+        'contact_person': req.contact_person,                 # ÚJ
+        'contact_phone': req.contact_phone,                   # ÚJ
         'sampling_date': req.sampling_date.isoformat() if req.sampling_date else None,
         'deadline': req.deadline.isoformat() if req.deadline else None,
         'special_instructions': req.special_instructions,
@@ -641,6 +649,9 @@ def get_request_detail(current_user, request_id):
         'urgency': req.urgency,
         'status': req.status,
         'sampling_location': req.sampling_location,
+        'sampling_address': req.sampling_address,             # ÚJ
+        'contact_person': req.contact_person,                 # ÚJ
+        'contact_phone': req.contact_phone,                   # ÚJ
         'sampling_date': req.sampling_date.isoformat() if req.sampling_date else None,
         'deadline': req.deadline.isoformat() if req.deadline else None,
         'special_instructions': req.special_instructions,
@@ -672,6 +683,7 @@ def create_request(current_user):
         total_price = sum(tt.price for tt in test_types)
     
     sampling_date = datetime.datetime.fromisoformat(data.get('sampling_date')) if data.get('sampling_date') else None
+    deadline = datetime.datetime.fromisoformat(data.get('deadline')) if data.get('deadline') and data.get('deadline').strip() else None
     
     new_request = LabRequest(
         user_id=current_user.id,
@@ -683,8 +695,11 @@ def create_request(current_user):
         urgency=data.get('urgency', 'normal'),
         status=data.get('status', 'draft'),
         sampling_location=data.get('sampling_location'),
+        sampling_address=data.get('sampling_address'),      # ÚJ
+        contact_person=data.get('contact_person'),          # ÚJ
+        contact_phone=data.get('contact_phone'),            # ÚJ
         sampling_date=sampling_date,
-        deadline=datetime.datetime.fromisoformat(data.get('deadline')) if data.get('deadline') else None,
+        deadline=deadline,                                   # NULLABLE
         special_instructions=data.get('special_instructions')
     )
     
@@ -817,10 +832,16 @@ def update_request(current_user, request_id):
         req.urgency = data['urgency']
     if 'sampling_location' in data:
         req.sampling_location = data['sampling_location']
+    if 'sampling_address' in data:
+        req.sampling_address = data['sampling_address']      # ÚJ
+    if 'contact_person' in data:
+        req.contact_person = data['contact_person']          # ÚJ
+    if 'contact_phone' in data:
+        req.contact_phone = data['contact_phone']            # ÚJ
     if 'sampling_date' in data:
         req.sampling_date = datetime.datetime.fromisoformat(data['sampling_date']) if data['sampling_date'] else None
     if 'deadline' in data:
-        req.deadline = datetime.datetime.fromisoformat(data['deadline']) if data['deadline'] else None
+        req.deadline = datetime.datetime.fromisoformat(data['deadline']) if data['deadline'] and data['deadline'].strip() else None
     if 'special_instructions' in data:
         req.special_instructions = data['special_instructions']
     if 'test_types' in data:

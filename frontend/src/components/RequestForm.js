@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { 
   AlertCircle, 
-  Calendar, 
+  Calendar,
+  CalendarCheck,  // ÚJ: Mai nap
   MapPin, 
   FileText,
   Save,
@@ -50,8 +51,11 @@ function RequestForm() {
     sample_description: '',
     urgency: 'normal',
     sampling_location: '',
+    sampling_address: '',      // ÚJ: Pontos cím
+    contact_person: '',         // ÚJ: Kontakt személy neve
+    contact_phone: '',          // ÚJ: Kontakt telefon
     sampling_date: '',
-    deadline: '',
+    deadline: '',               // NEM kötelező
     special_instructions: ''
   });
 
@@ -60,6 +64,12 @@ function RequestForm() {
     fetchCategories();
     if (isEditing) {
       loadRequest();
+    } else {
+      // Új kérés: alapértelmezetten a bejelentkezett user neve
+      setFormData(prev => ({ 
+        ...prev, 
+        contact_person: user.name || '' 
+      }));
     }
   }, [id]);
 
@@ -101,6 +111,9 @@ function RequestForm() {
         sample_description: req.sample_description,
         urgency: req.urgency,
         sampling_location: req.sampling_location,
+        sampling_address: req.sampling_address || '',        // ÚJ
+        contact_person: req.contact_person || user.name,     // ÚJ - alapból user neve
+        contact_phone: req.contact_phone || '',              // ÚJ
         sampling_date: req.sampling_date?.split('T')[0] || '',
         deadline: req.deadline?.split('T')[0] || '',
         special_instructions: req.special_instructions || ''
@@ -190,20 +203,51 @@ function RequestForm() {
   const handleSubmit = async (e, status = 'pending_approval') => {
     e.preventDefault();
 
-    // Validations
+    // Validations with scroll to first error
+    const scrollToError = (message, fieldId = null) => {
+      alert(message);
+      if (fieldId) {
+        const element = document.getElementById(fieldId) || document.querySelector(`[name="${fieldId}"]`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.focus();
+        }
+      }
+    };
+
     if (!formData.sample_id || formData.sample_id.trim() === '') {
-      alert('Kérlek add meg a Minta azonosítót!');
+      scrollToError('Kérlek add meg a Minta azonosítót!', 'sample_id');
+      return;
+    }
+
+    if (!formData.sampling_location || formData.sampling_location.trim() === '') {
+      scrollToError('Kérlek add meg a mintavétel helyét!', 'sampling_location');
+      return;
+    }
+
+    if (!formData.sampling_address || formData.sampling_address.trim() === '') {
+      scrollToError('Kérlek add meg a mintavétel pontos címét!', 'sampling_address');
+      return;
+    }
+
+    if (!formData.contact_person || formData.contact_person.trim() === '') {
+      scrollToError('Kérlek add meg a kontakt személy nevét!', 'contact_person');
+      return;
+    }
+
+    if (!formData.contact_phone || formData.contact_phone.trim() === '') {
+      scrollToError('Kérlek add meg a kontakt személy telefonszámát!', 'contact_phone');
       return;
     }
 
     if (selectedTests.length === 0) {
-      alert('Kérlek válassz ki legalább egy vizsgálattípust!');
+      scrollToError('Kérlek válassz ki legalább egy vizsgálattípust!');
       return;
     }
 
     // File size check
     if (attachmentFile && attachmentFile.size > 20 * 1024 * 1024) {
-      alert('A fájl mérete nem lehet nagyobb 20 MB-nál!');
+      scrollToError('A fájl mérete nem lehet nagyobb 20 MB-nál!');
       return;
     }
 
@@ -224,8 +268,11 @@ function RequestForm() {
       formDataObj.append('sample_description', formData.sample_description);
       formDataObj.append('urgency', formData.urgency);
       formDataObj.append('sampling_location', formData.sampling_location);
+      formDataObj.append('sampling_address', formData.sampling_address);     // ÚJ
+      formDataObj.append('contact_person', formData.contact_person);         // ÚJ
+      formDataObj.append('contact_phone', formData.contact_phone);           // ÚJ
       formDataObj.append('sampling_date', formData.sampling_date);
-      formDataObj.append('deadline', formData.deadline);
+      formDataObj.append('deadline', formData.deadline || '');               // OPCIONÁLIS
       formDataObj.append('special_instructions', formData.special_instructions);
       formDataObj.append('test_types', JSON.stringify(selectedTests));
       formDataObj.append('status', finalStatus);
@@ -359,25 +406,44 @@ function RequestForm() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Mintavétel dátuma *
               </label>
-              <input
-                type="date"
-                value={formData.sampling_date}
-                onChange={(e) => setFormData({ ...formData, sampling_date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                required
-              />
+              <div className="relative">
+                <input
+                  id="sampling_date"
+                  name="sampling_date"
+                  type="date"
+                  value={formData.sampling_date}
+                  onChange={(e) => setFormData({ ...formData, sampling_date: e.target.value })}
+                  className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+                {/* Mai nap gomb */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date().toISOString().split('T')[0];
+                    setFormData({ ...formData, sampling_date: today });
+                  }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded transition-colors flex items-center gap-1"
+                  title="Mai nap"
+                >
+                  <CalendarCheck className="w-3 h-3" />
+                  Ma
+                </button>
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Határidő *
+                Határidő
+                <span className="text-gray-400 ml-1">(opcionális)</span>
               </label>
               <input
+                id="deadline"
+                name="deadline"
                 type="date"
                 value={formData.deadline}
                 onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                required
               />
             </div>
           </div>
@@ -397,11 +463,14 @@ function RequestForm() {
             Mintavétel részletei
           </h2>
 
+          {/* Mintavétel helye */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Mintavétel helye *
             </label>
             <input
+              id="sampling_location"
+              name="sampling_location"
               type="text"
               value={formData.sampling_location}
               onChange={(e) => setFormData({ ...formData, sampling_location: e.target.value })}
@@ -409,6 +478,61 @@ function RequestForm() {
               required
               placeholder="pl. Százhalombatta, finomító"
             />
+          </div>
+
+          {/* Pontos cím - ÚJ */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pontos cím *
+            </label>
+            <input
+              id="sampling_address"
+              name="sampling_address"
+              type="text"
+              value={formData.sampling_address}
+              onChange={(e) => setFormData({ ...formData, sampling_address: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              required
+              placeholder="pl. 2440 Százhalombatta, Ipari út 42."
+            />
+          </div>
+
+          {/* Kontakt személy - ÚJ */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Kontakt személy *
+              </label>
+              <input
+                id="contact_person"
+                name="contact_person"
+                type="text"
+                value={formData.contact_person}
+                onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                required
+                placeholder="Alapértelmezett: feladó neve"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Aki a mintavétellel kapcsolatban kereshető
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Telefon *
+              </label>
+              <input
+                id="contact_phone"
+                name="contact_phone"
+                type="tel"
+                value={formData.contact_phone}
+                onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                required
+                placeholder="+36 30 123 4567"
+              />
+            </div>
           </div>
         </div>
 
@@ -420,7 +544,10 @@ function RequestForm() {
           </h2>
 
           {/* Group by Category - v6.6 with collapsible and icons */}
-          {categories.filter(cat => cat.is_active).map((category, index) => {
+          {categories
+            .filter(cat => cat.is_active)
+            .filter(cat => cat.name !== 'Minta előkészítés')  // 5. ELREJTÉS!
+            .map((category, index) => {
             const categoryTests = testTypes.filter(tt => tt.category_id === category.id && tt.is_active);
             if (categoryTests.length === 0) return null;
             
