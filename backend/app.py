@@ -86,7 +86,7 @@ class Company(db.Model):
     contact_phone = db.Column(db.String(20))
     logo_filename = db.Column(db.String(200))
     users = db.relationship('User', backref='company', lazy=True)
-    requests = db.relationship('LabRequest', backref='company', lazy=True)
+    # LabRequest kapcsolat a LabRequest oldalon definiálva (backref='lab_requests')
 
 class Department(db.Model):
     id = db.Column(db.Integer, primary_key=True)
