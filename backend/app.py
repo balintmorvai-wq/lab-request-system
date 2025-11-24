@@ -427,6 +427,17 @@ def mark_notification_read(current_user, notif_id):
 def mark_all_notifications_read(current_user):
     Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True})
     db.session.commit()
+
+@app.route('/api/admin/reseed', methods=['POST'])
+@token_required
+@role_required('super_admin')
+def admin_reseed(current_user):
+    """Admin endpoint to update seed data (categories, test types)"""
+    try:
+        update_seed_data()
+        return jsonify({'message': 'Seed adatok sikeresen frissítve!', 'success': True})
+    except Exception as e:
+        return jsonify({'message': f'Hiba: {str(e)}', 'success': False}), 500
     
     return jsonify({'message': 'Összes értesítés megjelölve'})
 
@@ -1376,6 +1387,158 @@ def get_stats(current_user):
         'revenue_by_status': {status: (revenue or 0) for status, revenue in revenue_by_status}
     })
 
+# --- v6.7 Data Definitions ---
+V67_CATEGORIES = [
+    {'name': 'Minta előkészítés', 'description': 'Mintavétel, előkészítés, homogenizálás', 'color': '#6366F1', 'icon': 'Package'},
+    {'name': 'Anyagvizsgálat', 'description': 'Anyagösszetétel és tulajdonságok meghatározása', 'color': '#0EA5E9', 'icon': 'Beaker'},
+    {'name': 'Kromatográfia', 'description': 'Gáz- és folyadékkromatográfiás vizsgálatok', 'color': '#8B5CF6', 'icon': 'BarChart3'},
+    {'name': 'Fizikai tulajdonság', 'description': 'Fizikai jellemzők mérése (viszkozitás, sűrűség, stb.)', 'color': '#F59E0B', 'icon': 'Gauge'},
+]
+
+def get_v67_test_types(cat_minta_id, cat_anyag_id, cat_krom_id, cat_fizikai_id, dept_id):
+    """Return v6.7 test type definitions"""
+    return [
+        # Minta előkészítés
+        {'name': 'Mintavétel (helyszíni)', 'category_id': cat_minta_id, 'department_id': dept_id, 'price': 15000, 'duration_days': 1, 'standard': 'MSZ EN ISO 3170', 'sample_quantity': '1-5 L', 'turnaround_time': '1 nap', 'sample_prep_time': 30, 'measurement_time': 60, 'evaluation_time': 30},
+        {'name': 'Minta homogenizálás', 'category_id': cat_minta_id, 'department_id': dept_id, 'price': 8000, 'duration_days': 1, 'standard': 'Belső eljárás', 'sample_quantity': '100 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 15, 'measurement_time': 30, 'evaluation_time': 15},
+        # Anyagvizsgálat
+        {'name': 'Elemanalízis (ICP-OES)', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 45000, 'duration_days': 3, 'standard': 'MSZ EN ISO 11885', 'device': 'Thermo iCAP 7400', 'sample_quantity': '50 mL', 'turnaround_time': '3 nap', 'sample_prep_time': 60, 'measurement_time': 45, 'evaluation_time': 60, 'sample_prep_required': True},
+        {'name': 'Kéntartalom meghatározás', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 25000, 'duration_days': 2, 'standard': 'MSZ EN ISO 20846', 'device': 'Horiba SLFA-2100', 'sample_quantity': '20 mL', 'turnaround_time': '2 nap', 'sample_prep_time': 30, 'measurement_time': 20, 'evaluation_time': 30},
+        {'name': 'Víztartalom (Karl-Fischer)', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 18000, 'duration_days': 1, 'standard': 'MSZ EN ISO 12937', 'device': 'Metrohm 899', 'sample_quantity': '10 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 15, 'measurement_time': 15, 'evaluation_time': 20},
+        # Kromatográfia
+        {'name': 'GC-MS analízis', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 55000, 'duration_days': 3, 'standard': 'ASTM D2887', 'device': 'Agilent 8890 GC/5977B MS', 'sample_quantity': '5 mL', 'turnaround_time': '3 nap', 'sample_prep_time': 45, 'measurement_time': 90, 'evaluation_time': 60, 'sample_prep_required': True, 'hazard_level': 'medium'},
+        {'name': 'HPLC analízis', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 48000, 'duration_days': 2, 'standard': 'MSZ EN 12916', 'device': 'Waters Alliance e2695', 'sample_quantity': '10 mL', 'turnaround_time': '2 nap', 'sample_prep_time': 30, 'measurement_time': 60, 'evaluation_time': 45, 'sample_prep_required': True},
+        {'name': 'Szénhidrogén típus (PIONA)', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 65000, 'duration_days': 4, 'standard': 'ASTM D6839', 'device': 'AC Reformulyzer M4', 'sample_quantity': '5 mL', 'turnaround_time': '4 nap', 'sample_prep_time': 60, 'measurement_time': 120, 'evaluation_time': 90, 'sample_prep_required': True},
+        # Fizikai tulajdonság
+        {'name': 'Kinematikus viszkozitás', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 12000, 'duration_days': 1, 'standard': 'MSZ EN ISO 3104', 'device': 'Cannon-Fenske', 'sample_quantity': '50 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 20, 'measurement_time': 30, 'evaluation_time': 15},
+        {'name': 'Sűrűség (digitális)', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 8000, 'duration_days': 1, 'standard': 'MSZ EN ISO 12185', 'device': 'Anton Paar DMA 4500', 'sample_quantity': '10 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 10, 'measurement_time': 10, 'evaluation_time': 10},
+        {'name': 'Lobbanáspont (zárttéri)', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 15000, 'duration_days': 1, 'standard': 'MSZ EN ISO 2719', 'device': 'Pensky-Martens', 'sample_quantity': '100 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 15, 'measurement_time': 45, 'evaluation_time': 15, 'hazard_level': 'high'},
+        {'name': 'Dermedéspont', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 14000, 'duration_days': 1, 'standard': 'MSZ EN ISO 3016', 'sample_quantity': '50 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 15, 'measurement_time': 60, 'evaluation_time': 15},
+    ]
+
+# --- Ensure v6.7 Data (runs on every startup) ---
+def ensure_v67_data():
+    """Ensure v6.7 categories exist and update ALL test types with new fields"""
+    print("  🔄 Checking v6.7 data...")
+    
+    # 1. Ensure v6.7 categories exist
+    for cat_data in V67_CATEGORIES:
+        existing = RequestCategory.query.filter_by(name=cat_data['name']).first()
+        if not existing:
+            new_cat = RequestCategory(**cat_data)
+            db.session.add(new_cat)
+            print(f"    ✅ Kategória létrehozva: {cat_data['name']}")
+    db.session.commit()
+    
+    # 2. Get category IDs
+    cat_minta = RequestCategory.query.filter_by(name='Minta előkészítés').first()
+    cat_anyag = RequestCategory.query.filter_by(name='Anyagvizsgálat').first()
+    cat_krom = RequestCategory.query.filter_by(name='Kromatográfia').first()
+    cat_fizikai = RequestCategory.query.filter_by(name='Fizikai tulajdonság').first()
+    
+    # 3. Default department
+    dept = Department.query.first()
+    dept_id = dept.id if dept else None
+    
+    # 4. Get v6.7 test types
+    v67_test_types = get_v67_test_types(
+        cat_minta.id if cat_minta else None,
+        cat_anyag.id if cat_anyag else None,
+        cat_krom.id if cat_krom else None,
+        cat_fizikai.id if cat_fizikai else None,
+        dept_id
+    )
+    
+    # 5. Add new test types if they don't exist
+    for tt_data in v67_test_types:
+        existing = TestType.query.filter_by(name=tt_data['name']).first()
+        if not existing:
+            new_tt = TestType(**tt_data)
+            db.session.add(new_tt)
+            print(f"    ✅ Vizsgálat létrehozva: {tt_data['name']}")
+    db.session.commit()
+    
+    # 6. Update ALL existing test types with default values for new v6.7 fields if empty
+    all_test_types = TestType.query.all()
+    updated_count = 0
+    for tt in all_test_types:
+        needs_update = False
+        # Set defaults for empty v6.7 fields
+        if tt.sample_prep_time is None or tt.sample_prep_time == 0:
+            tt.sample_prep_time = 30  # default 30 perc
+            needs_update = True
+        if tt.measurement_time is None or tt.measurement_time == 0:
+            tt.measurement_time = 60  # default 60 perc
+            needs_update = True
+        if tt.evaluation_time is None or tt.evaluation_time == 0:
+            tt.evaluation_time = 30  # default 30 perc
+            needs_update = True
+        if tt.sample_quantity is None or tt.sample_quantity == '':
+            tt.sample_quantity = '50 mL'  # default
+            needs_update = True
+        if tt.turnaround_time is None or tt.turnaround_time == '' or tt.turnaround_time == '0':
+            tt.turnaround_time = f"{tt.duration_days} nap" if tt.duration_days else '1 nap'
+            needs_update = True
+        if needs_update:
+            updated_count += 1
+    
+    if updated_count > 0:
+        db.session.commit()
+        print(f"    📝 {updated_count} vizsgálat frissítve alapértelmezett v6.7 értékekkel")
+    
+    print("  ✅ v6.7 adatok rendben!")
+
+# --- Update Seed Data (for FORCE_RESEED) ---
+def update_seed_data():
+    """Update categories and test types - full reseed"""
+    with app.app_context():
+        print("  🔄 FORCE_RESEED: Kategóriák és vizsgálatok frissítése...")
+        
+        # Update all categories
+        for cat_data in V67_CATEGORIES:
+            existing = RequestCategory.query.filter_by(name=cat_data['name']).first()
+            if existing:
+                existing.description = cat_data['description']
+                existing.color = cat_data['color']
+                existing.icon = cat_data['icon']
+                print(f"    📝 Kategória frissítve: {cat_data['name']}")
+            else:
+                new_cat = RequestCategory(**cat_data)
+                db.session.add(new_cat)
+                print(f"    ✅ Kategória létrehozva: {cat_data['name']}")
+        db.session.commit()
+        
+        # Get category IDs
+        cat_minta = RequestCategory.query.filter_by(name='Minta előkészítés').first()
+        cat_anyag = RequestCategory.query.filter_by(name='Anyagvizsgálat').first()
+        cat_krom = RequestCategory.query.filter_by(name='Kromatográfia').first()
+        cat_fizikai = RequestCategory.query.filter_by(name='Fizikai tulajdonság').first()
+        dept = Department.query.first()
+        
+        v67_test_types = get_v67_test_types(
+            cat_minta.id if cat_minta else None,
+            cat_anyag.id if cat_anyag else None,
+            cat_krom.id if cat_krom else None,
+            cat_fizikai.id if cat_fizikai else None,
+            dept.id if dept else None
+        )
+        
+        # Update or create test types
+        for tt_data in v67_test_types:
+            existing = TestType.query.filter_by(name=tt_data['name']).first()
+            if existing:
+                for key, value in tt_data.items():
+                    if value is not None:
+                        setattr(existing, key, value)
+                print(f"    📝 Vizsgálat frissítve: {tt_data['name']}")
+            else:
+                new_tt = TestType(**tt_data)
+                db.session.add(new_tt)
+                print(f"    ✅ Vizsgálat létrehozva: {tt_data['name']}")
+        
+        db.session.commit()
+        print("  ✅ FORCE_RESEED kész!")
+
 # --- Initialize Database ---
 def init_db():
     with app.app_context():
@@ -2161,9 +2324,19 @@ else:
         print("🔄 Checking for database migrations...")
         auto_migrate()
         
-        # Initialize data if needed
-        if RequestCategory.query.count() == 0:
+        # Check for force reseed
+        force_reseed = os.environ.get('FORCE_RESEED', 'false').lower() == 'true'
+        
+        if force_reseed:
+            print("⚠️ FORCE_RESEED enabled - updating categories and test types...")
+            update_seed_data()
+            print("✅ Seed data updated!")
+        elif RequestCategory.query.count() == 0:
             print("🔄 No data found, initializing database...")
             init_db()
             print("✅ Database initialized!")
+        
+        # ALWAYS ensure v6.7 data exists and fields are populated
+        ensure_v67_data()
+        
     print("✅ Production initialization complete!\n")
