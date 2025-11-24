@@ -101,11 +101,14 @@ function RequestList() {
     let filtered = requests;
 
     if (searchTerm) {
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(req =>
-        req.sample_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        req.sample_description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        req.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        req.user_name.toLowerCase().includes(searchTerm.toLowerCase())
+        (req.request_number && req.request_number.toLowerCase().includes(term)) ||
+        (req.internal_id && req.internal_id.toLowerCase().includes(term)) ||
+        (req.sample_id && req.sample_id.toLowerCase().includes(term)) ||
+        (req.sample_description && req.sample_description.toLowerCase().includes(term)) ||
+        (req.company_name && req.company_name.toLowerCase().includes(term)) ||
+        (req.user_name && req.user_name.toLowerCase().includes(term))
       );
     }
 
@@ -288,8 +291,13 @@ function RequestList() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-3">
                         <h3 className="text-lg font-bold text-gray-900">
-                          {request.sample_id}
+                          {request.request_number || request.sample_id}
                         </h3>
+                        {request.internal_id && (
+                          <span className="text-sm text-gray-500">
+                            ({request.internal_id})
+                          </span>
+                        )}
                         <span className={`px-3 py-1 text-xs font-medium rounded-full ${statusConfig[request.status].color} flex items-center gap-1`}>
                           <StatusIcon className="w-3 h-3" />
                           {statusConfig[request.status].label}
