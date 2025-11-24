@@ -1,62 +1,107 @@
-# 🧪 Laborkérés Kezelő Rendszer v6.6
+# 🧪 Laborkérés Kezelő Rendszer v6.7
 
-## 🎉 v6.6 VÁLTOZÁSOK:
+## 🎉 v6.7 VÁLTOZÁSOK:
 
-### 1. ✅ Kategória rendszer VISSZAÁLLÍTVA
-**Probléma v6.5:** Szakmai kategória törölve volt, csak Department szerint csoportosított
-
-**Megoldás v6.6:**
-- ✅ TestType.category_id **VISSZA**
-- ✅ Vizsgálatok kategória szerint csoportosítva (színes)
-- ✅ Egyetemi admin kategorizálhatja a vizsgálatokat
-
-**Backend:**
-```python
-class TestType(db.Model):
-    # ...
-    category_id = db.Column(db.Integer, db.ForeignKey('request_category.id'))  # v6.6 VISSZA
-    category = db.relationship('RequestCategory', backref='test_types')  # v6.6 VISSZA
-```
-
-**Végső kategória struktúra:**
-- **RequestCategory:** Laborkérés kategóriája (Rutin, Sürgős, Kutatás)
-- **TestType.category_id:** Vizsgálattípus szakmai kategóriája (Fizikai, Kémiai, stb.)
-- **Department:** Szervezeti egység (Kémiai Labor, stb.)
+### 1. ✅ VIZSGÁLATTÍPUSOK KIBŐVÍTETT ADATMODELL
+**Új oszlopok a TestType modellben:**
+- `standard` - Szabvány (pl. MSZ EN ISO 3104)
+- `device` - Készülék neve
+- `cost_price` - Önköltség (Ft/minta)
+- `measurement_time` - Mérési idő (óra)
+- `sample_prep_time` - Mintaelőkészítési idő (óra)
+- `evaluation_time` - Kiértékelés (óra)
+- `turnaround_time` - Átfutási idő (óra)
+- `sample_quantity` - Minta mennyiség (ml)
+- `sample_prep_required` - Mintaelőkészítés szükséges
+- `hazard_level` - Veszélyesség
 
 ---
 
-### 2. ✅ "Cég által elutasítva" ÖNÁLLÓ STÁTUSZ
-**Probléma v6.5:** Rejected státusz szerkeszthető volt, de újrabeküldéskor pending_approval lett
+### 2. ✅ LABORKÉRÉS ÚJ MEZŐK
 
-**Megoldás v6.6:**
-- ✅ Rejected **MARAD rejected** szerkesztés után
-- ✅ Önálló státusz kategória
-- ✅ Szerkeszthető, de flagelve marad
+**Azonosítók:**
+- `request_number` - Generált egyedi azonosító (pl. MOL-20241124-001)
+- `internal_id` - Céges belső azonosító (szabadon szerkeszthető)
 
-**Backend:**
-```python
-# v6.6: If status is rejected and user is editing, keep it rejected
-if old_status == 'rejected' and current_user.role == 'company_user':
-    if 'status' not in data or data.get('status') == 'pending_approval':
-        data['status'] = 'rejected'  # Force stay in rejected
+**Mintavétel:**
+- `sampling_datetime` - Mintavétel időpontja (dátum + óra:perc)
+- `sampling_location` - Mintavétel helye
+
+**Minta feladás:**
+- `logistics_type` - 'sender' (feladó) vagy 'provider' (szolgáltató szállít)
+- `shipping_address` - Pontos cím (csak ha szolgáltató szállít)
+- `contact_person` - Kontakt személy
+- `contact_phone` - Telefon
+
+---
+
+### 3. ✅ ÚJ PRIORITÁS VÁLASZTÓ
+**Vízszintes, beszédes prioritás választó:**
+- ⚪ **Normál** - Standard átfutás
+- 🟡 **Sürgős** - Gyorsított feldolgozás  
+- 🔴 **Kritikus** - Azonnali prioritás
+
+---
+
+### 4. ✅ MINTA FELADÁS RÉSZLETEI BLOKK
+**Markáns logisztika választó:**
+- 🏢 **Feladó gondoskodik** - Mi juttatjuk el a mintát a laborba
+- 🚚 **Szolgáltató szállít** - A labor küldjön futárt
+
+Ha szolgáltató szállít, megjelenik a szállítási cím mező.
+
+---
+
+### 5. ✅ KATEGÓRIA "ÖSSZES KIJELÖLÉSE"
+A vizsgálatválasztónál minden kategória fejlécében:
+- Select all checkbox
+- Számláló: kijelölt/összes (pl. 3/8)
+
+---
+
+### 6. ✅ ÚJ SZAKMAI KATEGÓRIÁK
+- **Minta előkészítés**
+- **Anyagvizsgálat**
+- **Kromatográfia**
+- **Fizikai tulajdonság**
+
+---
+
+### 7. ✅ PDF ÉKEZETES KARAKTEREK JAVÍTÁSA
+Többféle fallback font támogatás:
+- DejaVuSans
+- FreeSans
+- LiberationSans
+- Helvetica (végső fallback)
+
+---
+
+## 📋 TESZT FELHASZNÁLÓK
+
+| Email | Jelszó | Szerepkör |
+|-------|--------|-----------|
+| admin@pannon.hu | admin123 | Egyetemi szuperadmin |
+| labor@pannon.hu | labor123 | Labor dolgozó |
+| admin@mol.hu | mol123 | Céges admin |
+| user@mol.hu | user123 | Céges felhasználó |
+
+---
+
+## 🚀 TELEPÍTÉS
+
+```bash
+# Backend
+cd backend
+pip install -r requirements.txt
+python app.py
+
+# Frontend
+cd frontend
+npm install
+npm start
 ```
 
-**Frontend:**
-```jsx
-// v6.6: Track original status
-const [originalStatus, setOriginalStatus] = useState('');
-
-// Keep rejected as rejected
-if (isEditing && originalStatus === 'rejected') {
-    finalStatus = 'rejected';
-}
-
-// Button text
-{originalStatus === 'rejected' 
-    ? 'Mentés (Elutasított)' 
-    : 'Beküldés jóváhagyásra'
-}
-```
+---
 
 **Munkafolyamat:**
 ```
