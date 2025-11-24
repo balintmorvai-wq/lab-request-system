@@ -28,11 +28,21 @@ if DATABASE_URL.startswith('postgres://'):
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,
-    'pool_recycle': 300,
-    'connect_args': {'connect_timeout': 10}
-}
+
+# Database engine options - különböző SQLite és PostgreSQL esetén
+if DATABASE_URL.startswith('sqlite'):
+    # SQLite - nincs connect_timeout
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+    }
+else:
+    # PostgreSQL
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+        'connect_args': {'connect_timeout': 10}
+    }
+
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['LOGO_FOLDER'] = 'uploads/logos'
 app.config['ATTACHMENT_FOLDER'] = 'uploads/attachments'
@@ -190,11 +200,11 @@ class LabRequest(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
     
-    # Kapcsolatok
-    user = db.relationship('User', foreign_keys=[user_id], backref='requests')
+    # Kapcsolatok - egyedi backref nevek!
+    user = db.relationship('User', foreign_keys=[user_id], backref='lab_requests')
     approver = db.relationship('User', foreign_keys=[approved_by])
-    category = db.relationship('RequestCategory', backref='requests')
-    company = db.relationship('Company', backref='requests')
+    category = db.relationship('RequestCategory', backref='lab_requests')
+    company = db.relationship('Company', backref='lab_requests')
 
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
