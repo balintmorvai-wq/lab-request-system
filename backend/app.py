@@ -1399,21 +1399,21 @@ def get_v67_test_types(cat_minta_id, cat_anyag_id, cat_krom_id, cat_fizikai_id, 
     """Return v6.7 test type definitions"""
     return [
         # Minta előkészítés
-        {'name': 'Mintavétel (helyszíni)', 'category_id': cat_minta_id, 'department_id': dept_id, 'price': 15000, 'duration_days': 1, 'standard': 'MSZ EN ISO 3170', 'sample_quantity': '1-5 L', 'turnaround_time': '1 nap', 'sample_prep_time': 30, 'measurement_time': 60, 'evaluation_time': 30},
-        {'name': 'Minta homogenizálás', 'category_id': cat_minta_id, 'department_id': dept_id, 'price': 8000, 'duration_days': 1, 'standard': 'Belső eljárás', 'sample_quantity': '100 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 15, 'measurement_time': 30, 'evaluation_time': 15},
+        {'name': 'Mintavétel (helyszíni)', 'category_id': cat_minta_id, 'department_id': dept_id, 'price': 15000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 3170', 'sample_quantity': 1000, 'turnaround_time': 8, 'sample_prep_time': 0.5, 'measurement_time': 1, 'evaluation_time': 0.5},
+        {'name': 'Minta homogenizálás', 'category_id': cat_minta_id, 'department_id': dept_id, 'price': 8000, 'turnaround_days': 1, 'standard': 'Belső eljárás', 'sample_quantity': 100, 'turnaround_time': 8, 'sample_prep_time': 0.25, 'measurement_time': 0.5, 'evaluation_time': 0.25},
         # Anyagvizsgálat
-        {'name': 'Elemanalízis (ICP-OES)', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 45000, 'duration_days': 3, 'standard': 'MSZ EN ISO 11885', 'device': 'Thermo iCAP 7400', 'sample_quantity': '50 mL', 'turnaround_time': '3 nap', 'sample_prep_time': 60, 'measurement_time': 45, 'evaluation_time': 60, 'sample_prep_required': True},
-        {'name': 'Kéntartalom meghatározás', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 25000, 'duration_days': 2, 'standard': 'MSZ EN ISO 20846', 'device': 'Horiba SLFA-2100', 'sample_quantity': '20 mL', 'turnaround_time': '2 nap', 'sample_prep_time': 30, 'measurement_time': 20, 'evaluation_time': 30},
-        {'name': 'Víztartalom (Karl-Fischer)', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 18000, 'duration_days': 1, 'standard': 'MSZ EN ISO 12937', 'device': 'Metrohm 899', 'sample_quantity': '10 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 15, 'measurement_time': 15, 'evaluation_time': 20},
+        {'name': 'Elemanalízis (ICP-OES)', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 45000, 'turnaround_days': 3, 'standard': 'MSZ EN ISO 11885', 'device': 'Thermo iCAP 7400', 'sample_quantity': 50, 'turnaround_time': 24, 'sample_prep_time': 1, 'measurement_time': 0.75, 'evaluation_time': 1, 'sample_prep_required': True},
+        {'name': 'Kéntartalom meghatározás', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 25000, 'turnaround_days': 2, 'standard': 'MSZ EN ISO 20846', 'device': 'Horiba SLFA-2100', 'sample_quantity': 20, 'turnaround_time': 16, 'sample_prep_time': 0.5, 'measurement_time': 0.33, 'evaluation_time': 0.5},
+        {'name': 'Víztartalom (Karl-Fischer)', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 18000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 12937', 'device': 'Metrohm 899', 'sample_quantity': 10, 'turnaround_time': 8, 'sample_prep_time': 0.25, 'measurement_time': 0.25, 'evaluation_time': 0.33},
         # Kromatográfia
-        {'name': 'GC-MS analízis', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 55000, 'duration_days': 3, 'standard': 'ASTM D2887', 'device': 'Agilent 8890 GC/5977B MS', 'sample_quantity': '5 mL', 'turnaround_time': '3 nap', 'sample_prep_time': 45, 'measurement_time': 90, 'evaluation_time': 60, 'sample_prep_required': True, 'hazard_level': 'medium'},
-        {'name': 'HPLC analízis', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 48000, 'duration_days': 2, 'standard': 'MSZ EN 12916', 'device': 'Waters Alliance e2695', 'sample_quantity': '10 mL', 'turnaround_time': '2 nap', 'sample_prep_time': 30, 'measurement_time': 60, 'evaluation_time': 45, 'sample_prep_required': True},
-        {'name': 'Szénhidrogén típus (PIONA)', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 65000, 'duration_days': 4, 'standard': 'ASTM D6839', 'device': 'AC Reformulyzer M4', 'sample_quantity': '5 mL', 'turnaround_time': '4 nap', 'sample_prep_time': 60, 'measurement_time': 120, 'evaluation_time': 90, 'sample_prep_required': True},
+        {'name': 'GC-MS analízis', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 55000, 'turnaround_days': 3, 'standard': 'ASTM D2887', 'device': 'Agilent 8890 GC/5977B MS', 'sample_quantity': 5, 'turnaround_time': 24, 'sample_prep_time': 0.75, 'measurement_time': 1.5, 'evaluation_time': 1, 'sample_prep_required': True, 'hazard_level': 'medium'},
+        {'name': 'HPLC analízis', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 48000, 'turnaround_days': 2, 'standard': 'MSZ EN 12916', 'device': 'Waters Alliance e2695', 'sample_quantity': 10, 'turnaround_time': 16, 'sample_prep_time': 0.5, 'measurement_time': 1, 'evaluation_time': 0.75, 'sample_prep_required': True},
+        {'name': 'Szénhidrogén típus (PIONA)', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 65000, 'turnaround_days': 4, 'standard': 'ASTM D6839', 'device': 'AC Reformulyzer M4', 'sample_quantity': 5, 'turnaround_time': 32, 'sample_prep_time': 1, 'measurement_time': 2, 'evaluation_time': 1.5, 'sample_prep_required': True},
         # Fizikai tulajdonság
-        {'name': 'Kinematikus viszkozitás', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 12000, 'duration_days': 1, 'standard': 'MSZ EN ISO 3104', 'device': 'Cannon-Fenske', 'sample_quantity': '50 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 20, 'measurement_time': 30, 'evaluation_time': 15},
-        {'name': 'Sűrűség (digitális)', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 8000, 'duration_days': 1, 'standard': 'MSZ EN ISO 12185', 'device': 'Anton Paar DMA 4500', 'sample_quantity': '10 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 10, 'measurement_time': 10, 'evaluation_time': 10},
-        {'name': 'Lobbanáspont (zárttéri)', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 15000, 'duration_days': 1, 'standard': 'MSZ EN ISO 2719', 'device': 'Pensky-Martens', 'sample_quantity': '100 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 15, 'measurement_time': 45, 'evaluation_time': 15, 'hazard_level': 'high'},
-        {'name': 'Dermedéspont', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 14000, 'duration_days': 1, 'standard': 'MSZ EN ISO 3016', 'sample_quantity': '50 mL', 'turnaround_time': '1 nap', 'sample_prep_time': 15, 'measurement_time': 60, 'evaluation_time': 15},
+        {'name': 'Kinematikus viszkozitás', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 12000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 3104', 'device': 'Cannon-Fenske', 'sample_quantity': 50, 'turnaround_time': 8, 'sample_prep_time': 0.33, 'measurement_time': 0.5, 'evaluation_time': 0.25},
+        {'name': 'Sűrűség (digitális)', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 8000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 12185', 'device': 'Anton Paar DMA 4500', 'sample_quantity': 10, 'turnaround_time': 8, 'sample_prep_time': 0.17, 'measurement_time': 0.17, 'evaluation_time': 0.17},
+        {'name': 'Lobbanáspont (zárttéri)', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 15000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 2719', 'device': 'Pensky-Martens', 'sample_quantity': 100, 'turnaround_time': 8, 'sample_prep_time': 0.25, 'measurement_time': 0.75, 'evaluation_time': 0.25, 'hazard_level': 'high'},
+        {'name': 'Dermedéspont', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 14000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 3016', 'sample_quantity': 50, 'turnaround_time': 8, 'sample_prep_time': 0.25, 'measurement_time': 1, 'evaluation_time': 0.25},
     ]
 
 # --- Ensure v6.7 Data (runs on every startup) ---
@@ -1463,21 +1463,21 @@ def ensure_v67_data():
     updated_count = 0
     for tt in all_test_types:
         needs_update = False
-        # Set defaults for empty v6.7 fields
+        # Set defaults for empty v6.7 fields (values in hours)
         if tt.sample_prep_time is None or tt.sample_prep_time == 0:
-            tt.sample_prep_time = 30  # default 30 perc
+            tt.sample_prep_time = 0.5  # default 0.5 óra (30 perc)
             needs_update = True
         if tt.measurement_time is None or tt.measurement_time == 0:
-            tt.measurement_time = 60  # default 60 perc
+            tt.measurement_time = 1.0  # default 1 óra
             needs_update = True
         if tt.evaluation_time is None or tt.evaluation_time == 0:
-            tt.evaluation_time = 30  # default 30 perc
+            tt.evaluation_time = 0.5  # default 0.5 óra (30 perc)
             needs_update = True
-        if tt.sample_quantity is None or tt.sample_quantity == '':
-            tt.sample_quantity = '50 mL'  # default
+        if tt.sample_quantity is None or tt.sample_quantity == 0:
+            tt.sample_quantity = 50  # default 50 mL
             needs_update = True
-        if tt.turnaround_time is None or tt.turnaround_time == '' or tt.turnaround_time == '0':
-            tt.turnaround_time = f"{tt.duration_days} nap" if tt.duration_days else '1 nap'
+        if tt.turnaround_time is None or tt.turnaround_time == 0:
+            tt.turnaround_time = (tt.turnaround_days or 1) * 8  # turnaround_days * 8 óra
             needs_update = True
         if needs_update:
             updated_count += 1
