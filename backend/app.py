@@ -91,44 +91,18 @@ class Department(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class TestType(db.Model):
-    """
-    Vizsgálattípus model - v6.7 kibővített mezők
-    """
     id = db.Column(db.Integer, primary_key=True)
-    # Alapadatok
-    name = db.Column(db.String(200), nullable=False, unique=True)  # Rövid név
-    description = db.Column(db.Text)  # Mérési szolgáltatás, leírás
-    standard = db.Column(db.String(100))  # Szabvány (pl. MSZ EN ISO 3104)
-    
-    # Kategória és részleg
-    category_id = db.Column(db.Integer, db.ForeignKey('request_category.id'), nullable=True)
+    name = db.Column(db.String(200), nullable=False, unique=True)
+    description = db.Column(db.Text)
+    price = db.Column(db.Float, nullable=False)
     department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=True)
-    device = db.Column(db.String(200))  # Készülék
-    
-    # Árak
-    cost_price = db.Column(db.Float, default=0)  # Önköltség (Ft/minta)
-    price = db.Column(db.Float, nullable=False)  # Kiajánlási ár (Ft/minta)
-    
-    # Időadatok (órában)
-    measurement_time = db.Column(db.Float, default=0)  # Mérési idő (óra)
-    sample_prep_time = db.Column(db.Float, default=0)  # Mintaelőkészítési idő (óra)
-    evaluation_time = db.Column(db.Float, default=0)  # Kiértékelés (óra)
-    turnaround_time = db.Column(db.Float, default=0)  # Átfutási idő (óra) - számított vagy megadott
-    turnaround_days = db.Column(db.Integer, default=7)  # Legacy: napokban (backward compat)
-    
-    # Minta adatok
-    sample_quantity = db.Column(db.Float)  # Minta mennyiség (ml)
-    sample_prep_required = db.Column(db.Boolean, default=False)  # Mintaelőkészítés szükséges
-    hazard_level = db.Column(db.String(50))  # Veszélyesség (pl. "Nem veszélyes", "Gyúlékony", "Mérgező")
-    
-    # Státusz
+    category_id = db.Column(db.Integer, db.ForeignKey('request_category.id'), nullable=True)  # v6.6 VISSZA
+    turnaround_days = db.Column(db.Integer, default=7)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-    
-    # Kapcsolatok
     department = db.relationship('Department', backref='test_types')
-    category = db.relationship('RequestCategory', backref='test_types')
+    category = db.relationship('RequestCategory', backref='test_types')  # v6.6 VISSZA
 
 class RequestCategory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -141,60 +115,31 @@ class RequestCategory(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 class LabRequest(db.Model):
-    """
-    Laborkérés model - v6.7 kibővített mezők
-    """
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('request_category.id'), nullable=True)
-    
-    # v6.7: Azonosítók
-    request_number = db.Column(db.String(50), unique=True)  # Generált egyedi azonosító (pl. MOL-20241124-001)
-    internal_id = db.Column(db.String(100))  # Céges belső azonosító (szabadon szerkeszthető)
-    
-    # Minta adatok
-    sample_id = db.Column(db.String(100), nullable=False)  # Minta azonosító (legacy, most = internal_id)
-    sample_description = db.Column(db.Text)  # Minta leírása
-    
-    # v6.7: Mintavétel idő és hely - egy blokkban
-    sampling_datetime = db.Column(db.DateTime)  # Mintavétel időpontja (dátum + óra:perc)
-    sampling_location = db.Column(db.String(200))  # Mintavétel helye
-    sampling_date = db.Column(db.DateTime)  # Legacy (backward compat)
-    
-    # v6.7: Minta feladás részletei
-    logistics_type = db.Column(db.String(50), default='sender')  # 'sender' = feladó, 'provider' = szolgáltató
-    shipping_address = db.Column(db.String(500))  # Pontos cím (ha szolgáltató szállít)
-    contact_person = db.Column(db.String(200))  # Kontakt személy
-    contact_phone = db.Column(db.String(50))  # Telefon
-    sampling_address = db.Column(db.String(500))  # Legacy alias
-    
-    # Vizsgálatok
-    test_types = db.Column(db.Text, nullable=False)  # JSON lista
+    sample_id = db.Column(db.String(100), nullable=False)
+    sample_description = db.Column(db.Text)
+    test_types = db.Column(db.Text, nullable=False)
     total_price = db.Column(db.Float, default=0)
-    
-    # Prioritás és határidő
-    urgency = db.Column(db.String(50))  # 'normal', 'urgent', 'critical'
-    deadline = db.Column(db.DateTime, nullable=True)  # Határidő (opcionális)
-    
-    # Egyéb
+    urgency = db.Column(db.String(50))
+    status = db.Column(db.String(50), default='draft')
+    sampling_location = db.Column(db.String(200))
+    sampling_address = db.Column(db.String(500))      # ÚJ: Pontos cím
+    contact_person = db.Column(db.String(200))        # ÚJ: Kontakt személy
+    contact_phone = db.Column(db.String(50))          # ÚJ: Telefon
+    sampling_date = db.Column(db.DateTime)
+    deadline = db.Column(db.DateTime, nullable=True)  # NULLABLE!
     special_instructions = db.Column(db.Text)
     attachment_filename = db.Column(db.String(200))
-    
-    # Státusz és workflow
-    status = db.Column(db.String(50), default='draft')
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime)
-    
-    # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-    
-    # Kapcsolatok
     user = db.relationship('User', foreign_keys=[user_id], backref='requests')
     approver = db.relationship('User', foreign_keys=[approved_by])
     category = db.relationship('RequestCategory', backref='requests')
-    company = db.relationship('Company', backref='requests')
 
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -206,41 +151,6 @@ class Notification(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     user = db.relationship('User', backref='notifications')
     lab_request = db.relationship('LabRequest', backref='notifications')
-
-# --- Request Number Generator ---
-def generate_request_number(company_short_name):
-    """
-    Generál egyedi kérés azonosítót
-    Formátum: {CÉG_RÖVID}-{YYYYMMDD}-{SORSZÁM}
-    Példa: MOL-20241124-001
-    """
-    today = datetime.datetime.now()
-    date_str = today.strftime('%Y%m%d')
-    
-    # Cég rövid név normalizálása (max 5 karakter, uppercase, ékezet nélkül)
-    import unicodedata
-    short = unicodedata.normalize('NFKD', company_short_name or 'LAB')
-    short = short.encode('ASCII', 'ignore').decode('ASCII')
-    short = ''.join(c for c in short if c.isalnum())[:5].upper() or 'LAB'
-    
-    # Mai napon belüli sorszám keresése
-    prefix = f"{short}-{date_str}-"
-    
-    # Utolsó mai kérés keresése ezzel a prefix-szel
-    last_request = LabRequest.query.filter(
-        LabRequest.request_number.like(f"{prefix}%")
-    ).order_by(LabRequest.request_number.desc()).first()
-    
-    if last_request and last_request.request_number:
-        try:
-            last_num = int(last_request.request_number.split('-')[-1])
-            next_num = last_num + 1
-        except (ValueError, IndexError):
-            next_num = 1
-    else:
-        next_num = 1
-    
-    return f"{prefix}{next_num:03d}"
 
 # --- Notification Helper ---
 def create_notification(user_id, request_id, notif_type, message):
@@ -588,23 +498,13 @@ def get_test_types(current_user):
         'id': tt.id,
         'name': tt.name,
         'description': tt.description,
-        'standard': tt.standard,
         'price': tt.price,
-        'cost_price': tt.cost_price,
         'department_id': tt.department_id,
         'department_name': tt.department.name if tt.department else None,
-        'category_id': tt.category_id,
-        'category_name': tt.category.name if tt.category else None,
-        'category_color': tt.category.color if tt.category else None,
-        'device': tt.device,
+        'category_id': tt.category_id,  # v6.6
+        'category_name': tt.category.name if tt.category else None,  # v6.6
+        'category_color': tt.category.color if tt.category else None,  # v6.6
         'turnaround_days': tt.turnaround_days,
-        'turnaround_time': tt.turnaround_time,
-        'measurement_time': tt.measurement_time,
-        'sample_prep_time': tt.sample_prep_time,
-        'evaluation_time': tt.evaluation_time,
-        'sample_quantity': tt.sample_quantity,
-        'sample_prep_required': tt.sample_prep_required,
-        'hazard_level': tt.hazard_level,
         'is_active': tt.is_active
     } for tt in test_types])
 
@@ -678,27 +578,15 @@ def delete_test_type(current_user, test_type_id):
 
 # --- Lab Requests Routes ---
 def get_test_type_details(test_type_ids):
-    """Return detailed test type info for a request"""
     try:
         ids = json.loads(test_type_ids)
         test_types = TestType.query.filter(TestType.id.in_(ids)).all()
         return [{
             'id': tt.id,
             'name': tt.name,
-            'description': tt.description,
-            'standard': tt.standard,
             'price': tt.price,
-            'cost_price': tt.cost_price,
             'turnaround_days': tt.turnaround_days,
-            'turnaround_time': tt.turnaround_time,
-            'measurement_time': tt.measurement_time,
-            'sample_prep_time': tt.sample_prep_time,
-            'evaluation_time': tt.evaluation_time,
-            'sample_quantity': tt.sample_quantity,
-            'hazard_level': tt.hazard_level,
-            'device': tt.device,
-            'department_name': tt.department.name if tt.department else None,
-            'category_name': tt.category.name if tt.category else None
+            'department_name': tt.department.name if tt.department else None
         } for tt in test_types]
     except:
         return []
@@ -715,30 +603,20 @@ def get_requests(current_user):
     
     return jsonify([{
         'id': req.id,
-        # v6.7 azonosítók
-        'request_number': req.request_number,
-        'internal_id': req.internal_id,
-        'sample_id': req.sample_id,  # Legacy
-        # Minta
+        'sample_id': req.sample_id,
         'sample_description': req.sample_description,
-        'sampling_datetime': req.sampling_datetime.isoformat() if req.sampling_datetime else None,
-        'sampling_location': req.sampling_location,
-        'sampling_date': req.sampling_date.isoformat() if req.sampling_date else None,
-        # Feladás
-        'logistics_type': req.logistics_type,
-        'shipping_address': req.shipping_address,
-        'contact_person': req.contact_person,
-        'contact_phone': req.contact_phone,
-        # Vizsgálatok
         'test_types': get_test_type_details(req.test_types),
         'total_price': req.total_price,
-        # Prioritás
         'urgency': req.urgency,
+        'status': req.status,
+        'sampling_location': req.sampling_location,
+        'sampling_address': req.sampling_address,             # ÚJ
+        'contact_person': req.contact_person,                 # ÚJ
+        'contact_phone': req.contact_phone,                   # ÚJ
+        'sampling_date': req.sampling_date.isoformat() if req.sampling_date else None,
         'deadline': req.deadline.isoformat() if req.deadline else None,
-        # Egyéb
         'special_instructions': req.special_instructions,
         'attachment_filename': req.attachment_filename,
-        'status': req.status,
         'category': {
             'id': req.category.id,
             'name': req.category.name,
@@ -746,7 +624,7 @@ def get_requests(current_user):
         } if req.category else None,
         'created_at': req.created_at.isoformat(),
         'user_name': req.user.name,
-        'company_name': req.company.name if req.company else None,
+        'company_name': req.company.name,
         'approved_by': req.approver.name if req.approver else None,
         'approved_at': req.approved_at.isoformat() if req.approved_at else None
     } for req in requests])
@@ -764,44 +642,31 @@ def get_request_detail(current_user, request_id):
     
     return jsonify({
         'id': req.id,
-        # v6.7 azonosítók
-        'request_number': req.request_number,
-        'internal_id': req.internal_id,
-        'sample_id': req.sample_id,  # Legacy
-        # Minta adatok
+        'sample_id': req.sample_id,
         'sample_description': req.sample_description,
-        'sampling_datetime': req.sampling_datetime.isoformat() if req.sampling_datetime else None,
-        'sampling_location': req.sampling_location,
-        'sampling_date': req.sampling_date.isoformat() if req.sampling_date else None,  # Legacy
-        # v6.7 feladás
-        'logistics_type': req.logistics_type or 'sender',
-        'shipping_address': req.shipping_address,
-        'contact_person': req.contact_person,
-        'contact_phone': req.contact_phone,
-        'sampling_address': req.sampling_address,  # Legacy
-        # Vizsgálatok
         'test_types': get_test_type_details(req.test_types),
         'total_price': req.total_price,
-        # Prioritás
         'urgency': req.urgency,
+        'status': req.status,
+        'sampling_location': req.sampling_location,
+        'sampling_address': req.sampling_address,             # ÚJ
+        'contact_person': req.contact_person,                 # ÚJ
+        'contact_phone': req.contact_phone,                   # ÚJ
+        'sampling_date': req.sampling_date.isoformat() if req.sampling_date else None,
         'deadline': req.deadline.isoformat() if req.deadline else None,
-        # Egyéb
         'special_instructions': req.special_instructions,
         'attachment_filename': req.attachment_filename,
-        # Státusz
-        'status': req.status,
         'category_id': req.category_id,
         'category': {
             'id': req.category.id,
             'name': req.category.name,
             'color': req.category.color
         } if req.category else None,
-        # Meta
         'created_at': req.created_at.isoformat(),
         'user_name': req.user.name,
         'user_email': req.user.email,
         'user_phone': req.user.phone,
-        'company_name': req.company.name if req.company else None,
+        'company_name': req.company.name,
         'approved_by': req.approver.name if req.approver else None,
         'approved_at': req.approved_at.isoformat() if req.approved_at else None
     })
@@ -817,50 +682,24 @@ def create_request(current_user):
         test_types = TestType.query.filter(TestType.id.in_(test_type_ids)).all()
         total_price = sum(tt.price for tt in test_types)
     
-    # v6.7: Parse datetime with time
-    sampling_datetime = None
-    if data.get('sampling_datetime'):
-        try:
-            sampling_datetime = datetime.datetime.fromisoformat(data.get('sampling_datetime'))
-        except:
-            pass
-    
-    # Legacy sampling_date support
     sampling_date = datetime.datetime.fromisoformat(data.get('sampling_date')) if data.get('sampling_date') else None
     deadline = datetime.datetime.fromisoformat(data.get('deadline')) if data.get('deadline') and data.get('deadline').strip() else None
-    
-    # v6.7: Generate request number
-    company = Company.query.get(current_user.company_id)
-    company_short = company.name[:5] if company else 'LAB'
-    request_number = generate_request_number(company_short)
     
     new_request = LabRequest(
         user_id=current_user.id,
         company_id=current_user.company_id,
-        # v6.7 azonosítók
-        request_number=request_number,
-        internal_id=data.get('internal_id', ''),
-        # Minta adatok
-        sample_id=data.get('sample_id') or data.get('internal_id', ''),
+        sample_id=data.get('sample_id'),
         sample_description=data.get('sample_description'),
-        # v6.7 mintavétel
-        sampling_datetime=sampling_datetime,
-        sampling_location=data.get('sampling_location'),
-        sampling_date=sampling_date,  # Legacy
-        # v6.7 feladás
-        logistics_type=data.get('logistics_type', 'sender'),
-        shipping_address=data.get('shipping_address'),
-        contact_person=data.get('contact_person'),
-        contact_phone=data.get('contact_phone'),
-        sampling_address=data.get('shipping_address'),  # Legacy alias
-        # Vizsgálatok
         test_types=json.dumps(test_type_ids),
         total_price=total_price,
-        # Prioritás
         urgency=data.get('urgency', 'normal'),
-        deadline=deadline,
-        # Státusz
         status=data.get('status', 'draft'),
+        sampling_location=data.get('sampling_location'),
+        sampling_address=data.get('sampling_address'),      # ÚJ
+        contact_person=data.get('contact_person'),          # ÚJ
+        contact_phone=data.get('contact_phone'),            # ÚJ
+        sampling_date=sampling_date,
+        deadline=deadline,                                   # NULLABLE
         special_instructions=data.get('special_instructions')
     )
     
@@ -883,17 +722,13 @@ def create_request(current_user):
                 admin.id,
                 new_request.id,
                 'pending_approval',
-                f'{current_user.name} beküldött egy laborkérést jóváhagyásra: {new_request.request_number}'
+                f'{current_user.name} beküldött egy laborkérést jóváhagyásra: {new_request.sample_id}'
             )
     
     # Single commit for request and notifications
     db.session.commit()
     
-    return jsonify({
-        'message': 'Laborkérés sikeresen létrehozva!', 
-        'id': new_request.id,
-        'request_number': new_request.request_number
-    }), 201
+    return jsonify({'message': 'Laborkérés sikeresen létrehozva!', 'id': new_request.id}), 201
 
 @app.route('/api/requests/<int:request_id>', methods=['PUT'])
 @token_required
@@ -1059,38 +894,16 @@ def export_request_pdf(current_user, request_id):
     if current_user.role == 'company_user' and req.user_id != current_user.id:
         return jsonify({'message': 'Nincs jogosultságod!'}), 403
     
-    # v6.7 - Improved UTF-8 font registration for Hungarian characters
-    default_font = 'Helvetica'
-    bold_font = 'Helvetica-Bold'
-    
-    font_paths = [
-        # Linux paths
-        ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
-        # Ubuntu/Debian alternative
-        ('/usr/share/fonts/TTF/DejaVuSans.ttf', '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf'),
-        # FreeSans (wide Unicode support)
-        ('/usr/share/fonts/truetype/freefont/FreeSans.ttf', '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf'),
-        # Liberation Sans
-        ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'),
-    ]
-    
-    font_registered = False
-    for regular_path, bold_path in font_paths:
-        try:
-            if os.path.exists(regular_path) and os.path.exists(bold_path):
-                pdfmetrics.registerFont(TTFont('CustomFont', regular_path))
-                pdfmetrics.registerFont(TTFont('CustomFont-Bold', bold_path))
-                default_font = 'CustomFont'
-                bold_font = 'CustomFont-Bold'
-                font_registered = True
-                print(f"✅ PDF font registered: {regular_path}")
-                break
-        except Exception as e:
-            print(f"⚠️ Font registration failed for {regular_path}: {e}")
-            continue
-    
-    if not font_registered:
-        print("⚠️ Using Helvetica fallback (no UTF-8 support)")
+    # v6.5 - Register UTF-8 font for Hungarian characters
+    try:
+        pdfmetrics.registerFont(TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+        default_font = 'DejaVuSans'
+        bold_font = 'DejaVuSans-Bold'
+    except:
+        # Fallback to Helvetica if DejaVu not available
+        default_font = 'Helvetica'
+        bold_font = 'Helvetica-Bold'
     
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -1104,51 +917,32 @@ def export_request_pdf(current_user, request_id):
         textColor=colors.HexColor('#4F46E5'),
         spaceAfter=30,
         alignment=TA_CENTER,
-        fontName=bold_font
+        fontName=bold_font  # v6.5
     )
     elements.append(Paragraph('LABORKÉRÉS', title_style))
     elements.append(Spacer(1, 0.5*cm))
     
-    # v6.7: Kérés azonosító
-    id_style = ParagraphStyle('IDStyle', parent=styles['Normal'], fontSize=14, spaceAfter=20, fontName=default_font)
-    request_number = req.request_number or f"LAB-{req.id}"
-    elements.append(Paragraph(f'<b>Kérés azonosító:</b> {request_number}', id_style))
-    if req.internal_id:
-        elements.append(Paragraph(f'<b>Céges belső azonosító:</b> {req.internal_id}', id_style))
+    id_style = ParagraphStyle('IDStyle', parent=styles['Normal'], fontSize=14, spaceAfter=20, fontName=default_font)  # v6.5
+    elements.append(Paragraph(f'<b>Minta azonosító:</b> {req.sample_id}', id_style))
     elements.append(Spacer(1, 0.3*cm))
-    
-    # v6.7: Mintavétel időpont
-    sampling_time = '-'
-    if req.sampling_datetime:
-        sampling_time = req.sampling_datetime.strftime('%Y-%m-%d %H:%M')
-    elif req.sampling_date:
-        sampling_time = req.sampling_date.strftime('%Y-%m-%d')
-    
-    # v6.7: Logisztika info
-    logistics_text = 'Feladó gondoskodik' if req.logistics_type == 'sender' else 'Szolgáltató szállít'
     
     data = [
         ['Feladó:', req.user.name],
-        ['Cég:', req.company.name if req.company else '-'],
+        ['Cég:', req.company.name],
         ['Kategória:', req.category.name if req.category else '-'],
-        ['Mintavétel helye:', req.sampling_location or '-'],
-        ['Mintavétel időpontja:', sampling_time],
+        ['Mintavétel helye:', req.sampling_location],
+        ['Mintavétel dátuma:', req.sampling_date.strftime('%Y-%m-%d') if req.sampling_date else '-'],
         ['Határidő:', req.deadline.strftime('%Y-%m-%d') if req.deadline else '-'],
-        ['Minta leírása:', req.sample_description or '-'],
-        ['Logisztika:', logistics_text],
-        ['Kontakt:', f"{req.contact_person or '-'} ({req.contact_phone or '-'})"],
+        ['Minta leírása:', req.sample_description],
     ]
-    
-    if req.logistics_type == 'provider' and req.shipping_address:
-        data.append(['Szállítási cím:', req.shipping_address])
     
     table = Table(data, colWidths=[5*cm, 12*cm])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F3F4F6')),
         ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('FONTNAME', (0, 0), (0, -1), bold_font),
-        ('FONTNAME', (1, 0), (1, -1), default_font),
+        ('FONTNAME', (0, 0), (0, -1), bold_font),  # v6.5
+        ('FONTNAME', (1, 0), (1, -1), default_font),  # v6.5
         ('FONTSIZE', (0, 0), (-1, -1), 10),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
         ('GRID', (0, 0), (-1, -1), 1, colors.grey)
@@ -1156,7 +950,7 @@ def export_request_pdf(current_user, request_id):
     elements.append(table)
     elements.append(Spacer(1, 0.5*cm))
     
-    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontName=bold_font)
+    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontName=bold_font)  # v6.5
     elements.append(Paragraph('<b>Kért vizsgálatok:</b>', heading_style))
     elements.append(Spacer(1, 0.2*cm))
     
@@ -1371,7 +1165,7 @@ def init_db():
     with app.app_context():
         db.create_all()
         
-        # Create categories - v6.7 új kategóriák
+        # Create categories
         if RequestCategory.query.count() == 0:
             categories = [
                 # MINTA ELŐKÉSZÍTÉS - MINDIG ELSŐ HELYEN!
@@ -1381,24 +1175,61 @@ def init_db():
                     color='#6366F1',  # Indigo
                     icon='Package'
                 ),
-                # v6.7 Új kategóriák
+                # Nyersolaj vizsgálatok
                 RequestCategory(
-                    name='Anyagvizsgálat', 
-                    description='Anyagösszetétel és tulajdonságok meghatározása', 
+                    name='Nyersolaj vizsgálatok', 
+                    description='Kőolaj alapjellemzők meghatározása', 
+                    color='#0F172A',  # Dark slate
+                    icon='Droplet'
+                ),
+                # Finomított termékek
+                RequestCategory(
+                    name='Finomított termékek', 
+                    description='Benzin, dízel, fűtőolaj vizsgálatok', 
                     color='#0EA5E9',  # Sky blue
+                    icon='Fuel'
+                ),
+                # Kenőanyagok
+                RequestCategory(
+                    name='Kenőanyagok', 
+                    description='Motor- és ipari kenőolajok', 
+                    color='#F59E0B',  # Amber
+                    icon='Droplets'
+                ),
+                # Biodízel és bioüzemanyagok
+                RequestCategory(
+                    name='Biodízel és bioüzemanyagok', 
+                    description='Megújuló üzemanyagok vizsgálata', 
+                    color='#10B981',  # Green
+                    icon='Leaf'
+                ),
+                # Additívok és adalékanyagok
+                RequestCategory(
+                    name='Additívok', 
+                    description='Üzemanyag-adalékok, javítók', 
+                    color='#8B5CF6',  # Purple
                     icon='Beaker'
                 ),
+                # Környezetvédelem
                 RequestCategory(
-                    name='Kromatográfia', 
-                    description='Gáz- és folyadékkromatográfiás vizsgálatok', 
-                    color='#8B5CF6',  # Purple
-                    icon='BarChart3'
+                    name='Környezetvédelem', 
+                    description='Talaj, víz, levegő szennyezettség', 
+                    color='#059669',  # Emerald
+                    icon='TreePine'
                 ),
+                # Gázok vizsgálata
                 RequestCategory(
-                    name='Fizikai tulajdonság', 
-                    description='Fizikai jellemzők mérése (viszkozitás, sűrűség, stb.)', 
-                    color='#F59E0B',  # Amber
-                    icon='Gauge'
+                    name='Gázok', 
+                    description='PB-gáz, földgáz, biogáz', 
+                    color='#64748B',  # Slate
+                    icon='Wind'
+                ),
+                # Korróziós vizsgálatok
+                RequestCategory(
+                    name='Korrózió és kompatibilitás', 
+                    description='Anyagvizsgálat, kompatibilitás', 
+                    color='#DC2626',  # Red
+                    icon='AlertTriangle'
                 ),
             ]
             for cat in categories:
@@ -1419,13 +1250,18 @@ def init_db():
             db.session.commit()
             print("✅ Szervezeti egységek létrehozva!")
         
-        # Create test types - v6.7 új kategóriákkal
+        # Create test types
         if TestType.query.count() == 0:
             # Get category IDs
             cat_minta = RequestCategory.query.filter_by(name='Minta előkészítés').first().id
-            cat_anyag = RequestCategory.query.filter_by(name='Anyagvizsgálat').first().id
-            cat_krom = RequestCategory.query.filter_by(name='Kromatográfia').first().id
-            cat_fizikai = RequestCategory.query.filter_by(name='Fizikai tulajdonság').first().id
+            cat_nyersolaj = RequestCategory.query.filter_by(name='Nyersolaj vizsgálatok').first().id
+            cat_finomitott = RequestCategory.query.filter_by(name='Finomított termékek').first().id
+            cat_kenoanyag = RequestCategory.query.filter_by(name='Kenőanyagok').first().id
+            cat_biodiesel = RequestCategory.query.filter_by(name='Biodízel és bioüzemanyagok').first().id
+            cat_additivok = RequestCategory.query.filter_by(name='Additívok').first().id
+            cat_kornyezet = RequestCategory.query.filter_by(name='Környezetvédelem').first().id
+            cat_gazok = RequestCategory.query.filter_by(name='Gázok').first().id
+            cat_korrozio = RequestCategory.query.filter_by(name='Korrózió és kompatibilitás').first().id
             
             test_types = [
                 # MINTA ELŐKÉSZÍTÉS - FIX ELSŐ KATEGÓRIA (0 Ft, 0 nap, tény alapon)
@@ -1433,321 +1269,66 @@ def init_db():
                     name='Minta előkészítés', 
                     description='Minta függvényében, tény alapon kerül elszámolásra', 
                     price=0, 
-                    cost_price=0,
                     category_id=cat_minta, 
-                    department_id=1,
-                    turnaround_days=0,
-                    sample_prep_required=False
+                    department_id=1,  # Minta Előkészítő (ID=1)
+                    turnaround_days=0
                 ),
                 
-                # ANYAGVIZSGÁLAT
-                TestType(
-                    name='Kéntartalom', 
-                    description='Összes kéntartalom meghatározás röntgen fluoreszcencia módszerrel', 
-                    standard='MSZ EN ISO 20846',
-                    price=12000, 
-                    cost_price=8000,
-                    category_id=cat_anyag, 
-                    department_id=2, 
-                    device='Oxford XRF',
-                    turnaround_days=3,
-                    measurement_time=1,
-                    sample_prep_time=0.5,
-                    evaluation_time=0.5,
-                    turnaround_time=8,
-                    sample_quantity=50,
-                    hazard_level='Nem veszélyes'
-                ),
-                TestType(
-                    name='Víztartalom (Karl Fischer)', 
-                    description='Pontos vízmeghatározás titrálással', 
-                    standard='MSZ EN ISO 12937',
-                    price=8000, 
-                    cost_price=5000,
-                    category_id=cat_anyag, 
-                    department_id=2, 
-                    device='Metrohm KF Titrator',
-                    turnaround_days=2,
-                    measurement_time=0.5,
-                    sample_prep_time=0.25,
-                    evaluation_time=0.25,
-                    turnaround_time=4,
-                    sample_quantity=10,
-                    hazard_level='Nem veszélyes'
-                ),
-                TestType(
-                    name='Aszfaltén tartalom', 
-                    description='N-heptán oldhatatlan frakció meghatározás', 
-                    standard='ASTM D6560',
-                    price=15000, 
-                    cost_price=10000,
-                    category_id=cat_anyag, 
-                    department_id=3, 
-                    turnaround_days=7,
-                    measurement_time=4,
-                    sample_prep_time=2,
-                    evaluation_time=1,
-                    turnaround_time=24,
-                    sample_quantity=100,
-                    hazard_level='Gyúlékony'
-                ),
-                TestType(
-                    name='TBN (Teljes bázikus szám)', 
-                    description='Savsemlegesítő képesség', 
-                    standard='ASTM D2896',
-                    price=13000, 
-                    cost_price=8500,
-                    category_id=cat_anyag, 
-                    department_id=2, 
-                    turnaround_days=4,
-                    measurement_time=1.5,
-                    sample_prep_time=0.5,
-                    evaluation_time=0.5,
-                    turnaround_time=10,
-                    sample_quantity=50,
-                    hazard_level='Nem veszélyes'
-                ),
-                TestType(
-                    name='TAN (Teljes savas szám)', 
-                    description='Oxidáció, szennyeződés mértéke', 
-                    standard='ASTM D664',
-                    price=11000, 
-                    cost_price=7000,
-                    category_id=cat_anyag, 
-                    department_id=2, 
-                    turnaround_days=4,
-                    measurement_time=1.5,
-                    sample_prep_time=0.5,
-                    evaluation_time=0.5,
-                    turnaround_time=10,
-                    sample_quantity=50,
-                    hazard_level='Nem veszélyes'
-                ),
+                # NYERSOLAJ VIZSGÁLATOK
+                TestType(name='API fajsúly', description='Nyersolaj sűrűségének API egységekben', price=8000, category_id=cat_nyersolaj, department_id=3, turnaround_days=2),
+                TestType(name='Kéntartalom (nyersolaj)', description='Összes kéntartalom ASTM D4294 szerint', price=12000, category_id=cat_nyersolaj, department_id=2, turnaround_days=5),
+                TestType(name='Aszfaltén tartalom', description='N-heptán oldhatatlan frakció', price=15000, category_id=cat_nyersolaj, department_id=3, turnaround_days=7),
+                TestType(name='Pour point (ömléspont)', description='Minimális folyási hőmérséklet', price=9000, category_id=cat_nyersolaj, department_id=3, turnaround_days=3),
+                TestType(name='Paraffinvax tartalom', description='Szilárd paraffin koncentráció', price=13000, category_id=cat_nyersolaj, department_id=3, turnaround_days=5),
                 
-                # KROMATOGRÁFIA
-                TestType(
-                    name='FAME tartalom (GC)', 
-                    description='Zsírsav-metil-észter koncentráció gázkromatográfiával', 
-                    standard='EN 14103',
-                    price=14000, 
-                    cost_price=9500,
-                    category_id=cat_krom, 
-                    department_id=2, 
-                    device='Agilent 7890 GC-FID',
-                    turnaround_days=5,
-                    measurement_time=2,
-                    sample_prep_time=1,
-                    evaluation_time=1,
-                    turnaround_time=16,
-                    sample_quantity=5,
-                    hazard_level='Gyúlékony'
-                ),
-                TestType(
-                    name='Benzol tartalom', 
-                    description='Aromás szénhidrogén koncentráció GC-vel', 
-                    standard='EN 238',
-                    price=14000, 
-                    cost_price=9000,
-                    category_id=cat_krom, 
-                    department_id=2, 
-                    device='Agilent 7890 GC-MS',
-                    turnaround_days=5,
-                    measurement_time=1.5,
-                    sample_prep_time=0.5,
-                    evaluation_time=1,
-                    turnaround_time=12,
-                    sample_quantity=5,
-                    hazard_level='Mérgező'
-                ),
-                TestType(
-                    name='Gázösszetétel (GC)', 
-                    description='PB-gáz, földgáz komponens analízis', 
-                    standard='ASTM D1945',
-                    price=16000, 
-                    cost_price=11000,
-                    category_id=cat_krom, 
-                    department_id=2, 
-                    device='Agilent 7890 GC-TCD',
-                    turnaround_days=5,
-                    measurement_time=1,
-                    sample_prep_time=0.5,
-                    evaluation_time=1,
-                    turnaround_time=10,
-                    sample_quantity=500,  # ml gáz
-                    hazard_level='Gyúlékony'
-                ),
-                TestType(
-                    name='PAH vizsgálat (16 EPA)', 
-                    description='Poliaromás szénhidrogének GC-MS módszerrel', 
-                    standard='EPA 8270D',
-                    price=25000, 
-                    cost_price=17000,
-                    category_id=cat_krom, 
-                    department_id=4, 
-                    device='Agilent 7890/5977 GC-MS',
-                    turnaround_days=10,
-                    measurement_time=3,
-                    sample_prep_time=4,
-                    evaluation_time=2,
-                    turnaround_time=40,
-                    sample_quantity=100,
-                    hazard_level='Mérgező',
-                    sample_prep_required=True
-                ),
-                TestType(
-                    name='BTEX vizsgálat', 
-                    description='Benzol, Toluol, Etilbenzol, Xilol', 
-                    standard='EPA 8260',
-                    price=20000, 
-                    cost_price=13000,
-                    category_id=cat_krom, 
-                    department_id=4, 
-                    device='Agilent GC-MS Headspace',
-                    turnaround_days=7,
-                    measurement_time=2,
-                    sample_prep_time=1,
-                    evaluation_time=1.5,
-                    turnaround_time=20,
-                    sample_quantity=50,
-                    hazard_level='Mérgező'
-                ),
+                # FINOMÍTOTT TERMÉKEK (Benzin, Dízel, Fűtőolaj)
+                TestType(name='Oktánszám (RON/MON)', description='Benzin kopogásállóság vizsgálat', price=18000, category_id=cat_finomitott, department_id=3, turnaround_days=4),
+                TestType(name='Cetánszám', description='Dízel öngyulladási jellemző', price=20000, category_id=cat_finomitott, department_id=3, turnaround_days=5),
+                TestType(name='Lepárlási görbe', description='ASTM D86 desztilláció', price=16000, category_id=cat_finomitott, department_id=3, turnaround_days=6),
+                TestType(name='RVP (Reid-gőznyomás)', description='Benzin illékonyság 37.8°C-on', price=10000, category_id=cat_finomitott, department_id=3, turnaround_days=3),
+                TestType(name='Benzol tartalom', description='Aromás szénhidrogén koncentráció', price=14000, category_id=cat_finomitott, department_id=2, turnaround_days=5),
+                TestType(name='Oxigéntartalom', description='Oxigén-vegyületek mennyisége', price=12000, category_id=cat_finomitott, department_id=2, turnaround_days=4),
+                TestType(name='Dermedéspont', description='ASTM D97 mérés', price=9000, category_id=cat_finomitott, department_id=3, turnaround_days=3),
+                TestType(name='Hideg szűrhetőségi határérték (CFPP)', description='Dízel téli használhatóság', price=11000, category_id=cat_finomitott, department_id=3, turnaround_days=4),
+                TestType(name='Felhőpont', description='Paraffinok kikristályosodása', price=8500, category_id=cat_finomitott, department_id=3, turnaround_days=3),
+                TestType(name='Lobbanáspont', description='Tűzvédelmi jellemző meghatározás', price=7000, category_id=cat_finomitott, department_id=3, turnaround_days=2),
                 
-                # FIZIKAI TULAJDONSÁG
-                TestType(
-                    name='Viszkozitás (40°C)', 
-                    description='Kinematikai viszkozitás 40°C-on', 
-                    standard='ASTM D445',
-                    price=10000, 
-                    cost_price=6000,
-                    category_id=cat_fizikai, 
-                    department_id=3, 
-                    device='Anton Paar SVM 3001',
-                    turnaround_days=2,
-                    measurement_time=0.5,
-                    sample_prep_time=0.25,
-                    evaluation_time=0.25,
-                    turnaround_time=4,
-                    sample_quantity=20,
-                    hazard_level='Nem veszélyes'
-                ),
-                TestType(
-                    name='Viszkozitás (100°C)', 
-                    description='Kinematikai viszkozitás 100°C-on', 
-                    standard='ASTM D445',
-                    price=10000, 
-                    cost_price=6000,
-                    category_id=cat_fizikai, 
-                    department_id=3, 
-                    device='Anton Paar SVM 3001',
-                    turnaround_days=2,
-                    measurement_time=0.5,
-                    sample_prep_time=0.25,
-                    evaluation_time=0.25,
-                    turnaround_time=4,
-                    sample_quantity=20,
-                    hazard_level='Nem veszélyes'
-                ),
-                TestType(
-                    name='Sűrűség (15°C)', 
-                    description='Sűrűség meghatározás 15°C-on', 
-                    standard='ASTM D4052',
-                    price=6000, 
-                    cost_price=3500,
-                    category_id=cat_fizikai, 
-                    department_id=3, 
-                    device='Anton Paar DMA 4500',
-                    turnaround_days=1,
-                    measurement_time=0.25,
-                    sample_prep_time=0.1,
-                    evaluation_time=0.15,
-                    turnaround_time=2,
-                    sample_quantity=10,
-                    hazard_level='Nem veszélyes'
-                ),
-                TestType(
-                    name='Lobbanáspont', 
-                    description='Tűzvédelmi jellemző meghatározás', 
-                    standard='ASTM D93',
-                    price=7000, 
-                    cost_price=4500,
-                    category_id=cat_fizikai, 
-                    department_id=3, 
-                    device='Pensky-Martens készülék',
-                    turnaround_days=2,
-                    measurement_time=1,
-                    sample_prep_time=0.25,
-                    evaluation_time=0.25,
-                    turnaround_time=6,
-                    sample_quantity=75,
-                    hazard_level='Gyúlékony'
-                ),
-                TestType(
-                    name='Dermedéspont', 
-                    description='Minimális folyási hőmérséklet meghatározás', 
-                    standard='ASTM D97',
-                    price=9000, 
-                    cost_price=6000,
-                    category_id=cat_fizikai, 
-                    department_id=3, 
-                    turnaround_days=3,
-                    measurement_time=2,
-                    sample_prep_time=0.5,
-                    evaluation_time=0.5,
-                    turnaround_time=12,
-                    sample_quantity=50,
-                    hazard_level='Nem veszélyes'
-                ),
-                TestType(
-                    name='CFPP (Hideg szűrhetőség)', 
-                    description='Dízel téli használhatósági határ', 
-                    standard='EN 116',
-                    price=11000, 
-                    cost_price=7500,
-                    category_id=cat_fizikai, 
-                    department_id=3, 
-                    device='ISL CFPP készülék',
-                    turnaround_days=4,
-                    measurement_time=1.5,
-                    sample_prep_time=0.5,
-                    evaluation_time=0.5,
-                    turnaround_time=10,
-                    sample_quantity=50,
-                    hazard_level='Gyúlékony'
-                ),
-                TestType(
-                    name='Cetánszám', 
-                    description='Dízel öngyulladási jellemző', 
-                    standard='EN ISO 5165',
-                    price=20000, 
-                    cost_price=14000,
-                    category_id=cat_fizikai, 
-                    department_id=3, 
-                    device='CFR cetán motor',
-                    turnaround_days=5,
-                    measurement_time=3,
-                    sample_prep_time=1,
-                    evaluation_time=1,
-                    turnaround_time=20,
-                    sample_quantity=500,
-                    hazard_level='Gyúlékony'
-                ),
-                TestType(
-                    name='Oktánszám (RON)', 
-                    description='Benzin kopogásállóság - Research módszer', 
-                    standard='EN ISO 5164',
-                    price=18000, 
-                    cost_price=12000,
-                    category_id=cat_fizikai, 
-                    department_id=3, 
-                    device='CFR oktán motor',
-                    turnaround_days=4,
-                    measurement_time=2,
-                    sample_prep_time=0.5,
-                    evaluation_time=0.5,
-                    turnaround_time=16,
-                    sample_quantity=500,
-                    hazard_level='Gyúlékony'
-                ),
+                # KENŐANYAGOK
+                TestType(name='Viszkozitás (40°C és 100°C)', description='Kinematikai viszkozitás meghatározás', price=15000, category_id=cat_kenoanyag, department_id=3, turnaround_days=3),
+                TestType(name='Viszkozitási index (VI)', description='Viszkozitás hőmérsékletfüggése', price=12000, category_id=cat_kenoanyag, department_id=3, turnaround_days=3),
+                TestType(name='TBN (Teljes bázikus szám)', description='Savsemlegesítő képesség', price=13000, category_id=cat_kenoanyag, department_id=2, turnaround_days=4),
+                TestType(name='TAN (Teljes savas szám)', description='Oxidáció, szennyeződés mértéke', price=11000, category_id=cat_kenoanyag, department_id=2, turnaround_days=4),
+                TestType(name='Noack párolgás', description='Kenőolaj párolgási vesztesége 250°C', price=17000, category_id=cat_kenoanyag, department_id=3, turnaround_days=5),
+                TestType(name='Oxidációs stabilitás (RPVOT)', description='Forgónyomás oxigén teszt', price=19000, category_id=cat_kenoanyag, department_id=3, turnaround_days=6),
+                TestType(name='Kopásvédelem (Four-ball)', description='Négygolyós kopásvizsgálat', price=16000, category_id=cat_kenoanyag, department_id=3, turnaround_days=5),
+                
+                # BIODÍZEL ÉS BIOÜZEMANYAGOK
+                TestType(name='Észtartalom (FAME)', description='Zsírsav-metil-észter koncentráció', price=14000, category_id=cat_biodiesel, department_id=2, turnaround_days=5),
+                TestType(name='Glicerin tartalom', description='Szabad és teljes glicerin', price=13000, category_id=cat_biodiesel, department_id=2, turnaround_days=5),
+                TestType(name='Metanol tartalom', description='Maradék metanol GC-vel', price=12000, category_id=cat_biodiesel, department_id=2, turnaround_days=4),
+                TestType(name='Jódszám', description='Telítetlenség mértéke', price=10000, category_id=cat_biodiesel, department_id=2, turnaround_days=4),
+                TestType(name='Oxidációs stabilitás (Rancimat)', description='110°C-on induktív periódus', price=15000, category_id=cat_biodiesel, department_id=3, turnaround_days=6),
+                
+                # ADDITÍVOK ÉS ADALÉKANYAGOK
+                TestType(name='Adalékanyag koncentráció', description='Dózoló adalék pontos mennyisége', price=16000, category_id=cat_additivok, department_id=2, turnaround_days=5),
+                TestType(name='Detergens hatóanyag', description='Tisztító adalék aktivitás', price=14000, category_id=cat_additivok, department_id=2, turnaround_days=5),
+                TestType(name='Antioxidáns hatóanyag', description='Oxidációgátló koncentráció', price=13000, category_id=cat_additivok, department_id=2, turnaround_days=4),
+                
+                # KÖRNYEZETVÉDELEM
+                TestType(name='TPH (Összes szénhidrogén)', description='Talaj/víz olajszennyezettség', price=18000, category_id=cat_kornyezet, department_id=4, turnaround_days=7),
+                TestType(name='PAH (Poliaromás szénhidrogének)', description='EPA 16 PAH komponens', price=25000, category_id=cat_kornyezet, department_id=4, turnaround_days=10),
+                TestType(name='BTEX', description='Benzol, Toluol, Etilbenzol, Xilol', price=20000, category_id=cat_kornyezet, department_id=4, turnaround_days=7),
+                TestType(name='Nehézfém tartalom', description='ICP-MS módszerrel', price=22000, category_id=cat_kornyezet, department_id=4, turnaround_days=8),
+                
+                # GÁZOK
+                TestType(name='Gázösszetétel (GC)', description='PB-gáz, földgáz komponens analízis', price=16000, category_id=cat_gazok, department_id=2, turnaround_days=5),
+                TestType(name='Fűtőérték', description='Égéshő meghatározás bomba kalorimetriával', price=12000, category_id=cat_gazok, department_id=3, turnaround_days=4),
+                TestType(name='H₂S tartalom', description='Kénhidrogén koncentráció', price=10000, category_id=cat_gazok, department_id=2, turnaround_days=3),
+                
+                # KORRÓZIÓ ÉS KOMPATIBILITÁS
+                TestType(name='Réz korróziós teszt', description='ASTM D130 rézkorrózió', price=9000, category_id=cat_korrozio, department_id=3, turnaround_days=3),
+                TestType(name='Kompatibilitási vizsgálat', description='Üzemanyag keverhetőség teszt', price=15000, category_id=cat_korrozio, department_id=3, turnaround_days=5),
+                TestType(name='Víztartalom (Karl Fischer)', description='Pontos vízmeghatározás titrálással', price=8000, category_id=cat_korrozio, department_id=2, turnaround_days=2),
             ]
             for tt in test_types:
                 db.session.add(tt)

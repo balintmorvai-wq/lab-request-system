@@ -5,8 +5,7 @@ import axios from 'axios';
 import { 
   AlertCircle, 
   Calendar,
-  CalendarCheck,
-  Clock,
+  CalendarCheck,  // ÚJ: Mai nap
   MapPin, 
   FileText,
   Save,
@@ -16,13 +15,6 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Truck,
-  Building,
-  Phone,
-  User,
-  Hash,
-  CheckSquare,
-  Square,
   // Category icons
   Package,
   Droplet,
@@ -31,14 +23,12 @@ import {
   Leaf,
   Beaker,
   TreePine,
-  Wind,
-  BarChart3,
-  Gauge
+  Wind
 } from 'lucide-react';
 
 // Icon mapping for dynamic rendering
 const iconMap = {
-  Package, Droplet, Fuel, Droplets, Leaf, Beaker, TreePine, Wind, AlertTriangle, BarChart3, Gauge
+  Package, Droplet, Fuel, Droplets, Leaf, Beaker, TreePine, Wind, AlertTriangle
 };
 
 function RequestForm() {
@@ -49,30 +39,23 @@ function RequestForm() {
   const [testTypes, setTestTypes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedTests, setSelectedTests] = useState([]);
-  const [collapsedCategories, setCollapsedCategories] = useState({});
+  const [collapsedCategories, setCollapsedCategories] = useState({}); // Track collapsed state
   const [attachmentFile, setAttachmentFile] = useState(null);
   const [existingAttachment, setExistingAttachment] = useState('');
   const [loading, setLoading] = useState(true);
   const [deadlineWarning, setDeadlineWarning] = useState('');
-  const [originalStatus, setOriginalStatus] = useState('');
+  const [originalStatus, setOriginalStatus] = useState('');  // v6.6 track original status
   
-  // v6.7 form state
   const [formData, setFormData] = useState({
-    // Azonosítók
-    internal_id: '',             // Céges belső azonosító (szabadon szerkeszthető)
-    // Minta adatok
+    sample_id: '',
     sample_description: '',
-    sampling_datetime: '',       // Mintavétel időpontja (dátum + óra:perc)
-    sampling_location: '',       // Mintavétel helye
-    // Feladás részletei
-    logistics_type: 'sender',    // 'sender' vagy 'provider'
-    shipping_address: '',        // Cím (ha szolgáltató szállít)
-    contact_person: '',          // Kontakt személy
-    contact_phone: '',           // Telefon
-    // Prioritás
-    urgency: 'normal',           // 'normal', 'urgent', 'critical'
-    deadline: '',                // Határidő (opcionális)
-    // Egyéb
+    urgency: 'normal',
+    sampling_location: '',
+    sampling_address: '',      // ÚJ: Pontos cím
+    contact_person: '',         // ÚJ: Kontakt személy neve
+    contact_phone: '',          // ÚJ: Kontakt telefon
+    sampling_date: '',
+    deadline: '',               // NEM kötelező
     special_instructions: ''
   });
 
@@ -82,11 +65,10 @@ function RequestForm() {
     if (isEditing) {
       loadRequest();
     } else {
-      // Új kérés: alapértelmezett értékek
+      // Új kérés: alapértelmezetten a bejelentkezett user neve
       setFormData(prev => ({ 
         ...prev, 
-        contact_person: user.name || '',
-        contact_phone: user.phone || ''
+        contact_person: user.name || '' 
       }));
     }
   }, [id]);
@@ -124,31 +106,22 @@ function RequestForm() {
       });
       const req = response.data;
       
-      // v6.7: parse sampling_datetime (vagy legacy sampling_date)
-      let samplingDatetime = '';
-      if (req.sampling_datetime) {
-        samplingDatetime = req.sampling_datetime.slice(0, 16); // YYYY-MM-DDTHH:mm
-      } else if (req.sampling_date) {
-        samplingDatetime = req.sampling_date.split('T')[0] + 'T12:00';
-      }
-      
       setFormData({
-        internal_id: req.internal_id || req.sample_id || '',
-        sample_description: req.sample_description || '',
-        sampling_datetime: samplingDatetime,
-        sampling_location: req.sampling_location || '',
-        logistics_type: req.logistics_type || 'sender',
-        shipping_address: req.shipping_address || req.sampling_address || '',
-        contact_person: req.contact_person || user.name || '',
-        contact_phone: req.contact_phone || user.phone || '',
-        urgency: req.urgency || 'normal',
+        sample_id: req.sample_id,
+        sample_description: req.sample_description,
+        urgency: req.urgency,
+        sampling_location: req.sampling_location,
+        sampling_address: req.sampling_address || '',        // ÚJ
+        contact_person: req.contact_person || user.name,     // ÚJ - alapból user neve
+        contact_phone: req.contact_phone || '',              // ÚJ
+        sampling_date: req.sampling_date?.split('T')[0] || '',
         deadline: req.deadline?.split('T')[0] || '',
         special_instructions: req.special_instructions || ''
       });
       
       setSelectedTests(req.test_types.map(tt => tt.id));
       setExistingAttachment(req.attachment_filename || '');
-      setOriginalStatus(req.status);
+      setOriginalStatus(req.status);  // v6.6 track if it was rejected
     } catch (error) {
       console.error('Error loading request:', error);
       alert('Hiba történt a kérés betöltése során');
@@ -158,12 +131,12 @@ function RequestForm() {
 
   // Deadline warning check
   useEffect(() => {
-    if (selectedTests.length > 0 && formData.sampling_datetime && formData.deadline) {
+    if (selectedTests.length > 0 && formData.sampling_date && formData.deadline) {
       checkDeadlineWarning();
     } else {
       setDeadlineWarning('');
     }
-  }, [selectedTests, formData.sampling_datetime, formData.deadline]);
+  }, [selectedTests, formData.sampling_date, formData.deadline]);
 
   const fetchTestTypes = async () => {
     try {
@@ -179,14 +152,7 @@ function RequestForm() {
   };
 
   const checkDeadlineWarning = () => {
-    // v6.7: sampling_datetime-ból csak a dátum rész
-    const samplingDateStr = formData.sampling_datetime?.split('T')[0];
-    if (!samplingDateStr) {
-      setDeadlineWarning('');
-      return;
-    }
-    
-    const samplingDate = new Date(samplingDateStr);
+    const samplingDate = new Date(formData.sampling_date);
     const deadline = new Date(formData.deadline);
     
     // Get max turnaround time from selected tests
@@ -220,21 +186,6 @@ function RequestForm() {
     );
   };
 
-  // v6.7: kategória összes ki/bejelölése
-  const toggleAllInCategory = (categoryId) => {
-    const categoryTests = testTypes.filter(tt => tt.category_id === categoryId);
-    const categoryTestIds = categoryTests.map(tt => tt.id);
-    const allSelected = categoryTestIds.every(id => selectedTests.includes(id));
-    
-    if (allSelected) {
-      // Unselect all in category
-      setSelectedTests(prev => prev.filter(id => !categoryTestIds.includes(id)));
-    } else {
-      // Select all in category
-      setSelectedTests(prev => [...new Set([...prev, ...categoryTestIds])]);
-    }
-  };
-
   const toggleCategory = (categoryId) => {
     setCollapsedCategories(prev => ({
       ...prev,
@@ -264,13 +215,8 @@ function RequestForm() {
       }
     };
 
-    if (!formData.sample_description || formData.sample_description.trim() === '') {
-      scrollToError('Kérlek add meg a minta leírását!', 'sample_description');
-      return;
-    }
-
-    if (!formData.sampling_datetime) {
-      scrollToError('Kérlek add meg a mintavétel időpontját!', 'sampling_datetime');
+    if (!formData.sample_id || formData.sample_id.trim() === '') {
+      scrollToError('Kérlek add meg a Minta azonosítót!', 'sample_id');
       return;
     }
 
@@ -279,12 +225,9 @@ function RequestForm() {
       return;
     }
 
-    // v6.7: Ha szolgáltató szállít, kötelező a cím
-    if (formData.logistics_type === 'provider') {
-      if (!formData.shipping_address || formData.shipping_address.trim() === '') {
-        scrollToError('Kérlek add meg a szállítási címet!', 'shipping_address');
-        return;
-      }
+    if (!formData.sampling_address || formData.sampling_address.trim() === '') {
+      scrollToError('Kérlek add meg a mintavétel pontos címét!', 'sampling_address');
+      return;
     }
 
     if (!formData.contact_person || formData.contact_person.trim() === '') {
@@ -314,25 +257,22 @@ function RequestForm() {
     if (user?.role === 'company_admin' && status === 'pending_approval') {
       finalStatus = 'submitted';
     } else if (isEditing && originalStatus === 'rejected') {
+      // v6.6: Rejected requests stay rejected after editing
       finalStatus = 'rejected';
     }
 
     try {
-      // Use FormData for file upload support
+      // Use FormData for v4.0 backend (file upload support)
       const formDataObj = new FormData();
-      
-      // v6.7 mezők
-      formDataObj.append('internal_id', formData.internal_id);
-      formDataObj.append('sample_id', formData.internal_id || 'AUTO'); // Legacy support
+      formDataObj.append('sample_id', formData.sample_id);
       formDataObj.append('sample_description', formData.sample_description);
-      formDataObj.append('sampling_datetime', formData.sampling_datetime);
-      formDataObj.append('sampling_location', formData.sampling_location);
-      formDataObj.append('logistics_type', formData.logistics_type);
-      formDataObj.append('shipping_address', formData.shipping_address);
-      formDataObj.append('contact_person', formData.contact_person);
-      formDataObj.append('contact_phone', formData.contact_phone);
       formDataObj.append('urgency', formData.urgency);
-      formDataObj.append('deadline', formData.deadline || '');
+      formDataObj.append('sampling_location', formData.sampling_location);
+      formDataObj.append('sampling_address', formData.sampling_address);     // ÚJ
+      formDataObj.append('contact_person', formData.contact_person);         // ÚJ
+      formDataObj.append('contact_phone', formData.contact_phone);           // ÚJ
+      formDataObj.append('sampling_date', formData.sampling_date);
+      formDataObj.append('deadline', formData.deadline || '');               // OPCIONÁLIS
       formDataObj.append('special_instructions', formData.special_instructions);
       formDataObj.append('test_types', JSON.stringify(selectedTests));
       formDataObj.append('status', finalStatus);
@@ -353,22 +293,20 @@ function RequestForm() {
         alert(finalStatus === 'draft' ? 'Piszkozat frissítve!' : 'Kérés frissítve!');
       } else {
         // Create new request
-        const response = await axios.post(`${API_URL}/requests`, formDataObj, {
+        await axios.post(`${API_URL}/requests`, formDataObj, {
           headers: {
             ...getAuthHeaders(),
             'Content-Type': 'multipart/form-data'
           }
         });
         
-        const requestNumber = response.data?.request_number;
-        
         // v6.0: Different message for admin
         if (finalStatus === 'submitted') {
-          alert(`Laborkérés sikeresen beküldve!\nAzonosító: ${requestNumber}`);
+          alert('Laborkérés sikeresen beküldve az egyetemi adminnak!');
         } else if (finalStatus === 'draft') {
-          alert(`Piszkozat sikeresen mentve!\nAzonosító: ${requestNumber}`);
+          alert('Piszkozat sikeresen mentve!');
         } else {
-          alert(`Laborkérés sikeresen beküldve jóváhagyásra!\nAzonosító: ${requestNumber}`);
+          alert('Laborkérés sikeresen beküldve jóváhagyásra!');
         }
       }
 
@@ -403,7 +341,7 @@ function RequestForm() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Minta információk - v6.7 újratervezett blokk */}
+        {/* Basic Information */}
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600" />
@@ -413,23 +351,16 @@ function RequestForm() {
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Céges belső azonosító
-                <span className="text-gray-400 ml-1">(opcionális)</span>
+                Minta azonosító *
               </label>
-              <div className="relative">
-                <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  id="internal_id"
-                  value={formData.internal_id}
-                  onChange={(e) => setFormData({ ...formData, internal_id: e.target.value })}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  placeholder="pl. PR-2024-0123"
-                />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Szabadon megadható, belső nyilvántartáshoz
-              </p>
+              <input
+                type="text"
+                value={formData.sample_id}
+                onChange={(e) => setFormData({ ...formData, sample_id: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                required
+                placeholder="pl. MOL-2024-003"
+              />
             </div>
           </div>
 
@@ -438,7 +369,6 @@ function RequestForm() {
               Minta leírása *
             </label>
             <textarea
-              id="sample_description"
               value={formData.sample_description}
               onChange={(e) => setFormData({ ...formData, sample_description: e.target.value })}
               rows="3"
@@ -447,108 +377,65 @@ function RequestForm() {
               placeholder="Részletes leírás a mintáról..."
             />
           </div>
-
-          {/* Mintavétel idő és hely - ugyanabban a blokkban */}
-          <div className="grid md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                <Clock className="inline w-4 h-4 mr-1 text-indigo-600" />
-                Mintavétel időpontja *
-              </label>
-              <div className="relative">
-                <input
-                  id="sampling_datetime"
-                  name="sampling_datetime"
-                  type="datetime-local"
-                  value={formData.sampling_datetime}
-                  onChange={(e) => setFormData({ ...formData, sampling_datetime: e.target.value })}
-                  className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const now = new Date();
-                    const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-                    setFormData({ ...formData, sampling_datetime: localIso });
-                  }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded transition-colors flex items-center gap-1"
-                  title="Most"
-                >
-                  <CalendarCheck className="w-3 h-3" />
-                  Most
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                <MapPin className="inline w-4 h-4 mr-1 text-indigo-600" />
-                Mintavétel helye *
-              </label>
-              <input
-                type="text"
-                id="sampling_location"
-                value={formData.sampling_location}
-                onChange={(e) => setFormData({ ...formData, sampling_location: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                required
-                placeholder="pl. Finomító - 3-as üzem"
-              />
-            </div>
-          </div>
         </div>
 
-        {/* Prioritás és határidők - v6.7 vízszintes prioritás választó */}
+        {/* Priority and Deadlines */}
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-orange-600" />
             Prioritás és határidők
           </h2>
 
-          {/* v6.7: Beszédes vízszintes prioritás választó */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Sürgősség *
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              {[
-                { value: 'normal', label: 'Normál', icon: '⚪', color: 'border-gray-300 bg-gray-50', activeColor: 'border-green-500 bg-green-50 ring-2 ring-green-200', desc: 'Standard átfutás' },
-                { value: 'urgent', label: 'Sürgős', icon: '🟡', color: 'border-gray-300 bg-gray-50', activeColor: 'border-yellow-500 bg-yellow-50 ring-2 ring-yellow-200', desc: 'Gyorsított feldolgozás' },
-                { value: 'critical', label: 'Kritikus', icon: '🔴', color: 'border-gray-300 bg-gray-50', activeColor: 'border-red-500 bg-red-50 ring-2 ring-red-200', desc: 'Azonnali prioritás' }
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, urgency: opt.value })}
-                  className={`p-4 rounded-lg border-2 text-left transition-all ${
-                    formData.urgency === opt.value ? opt.activeColor : opt.color + ' hover:border-gray-400'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{opt.icon}</span>
-                    <span className="font-medium">{opt.label}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">{opt.desc}</p>
-                </button>
-              ))}
+          <div className="grid md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Sürgősség *
+              </label>
+              <select
+                value={formData.urgency}
+                onChange={(e) => setFormData({ ...formData, urgency: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              >
+                <option value="normal">⚪ Normal</option>
+                <option value="urgent">🟡 Sürgős</option>
+                <option value="critical">🔴 Kritikus</option>
+              </select>
             </div>
-          </div>
 
-          {/* Határidő */}
-          <div className="pt-4 border-t border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Határidő
-              <span className="text-gray-400 ml-1">(opcionális)</span>
-            </label>
-            <input
-              id="deadline"
-              name="deadline"
-              type="date"
-              value={formData.deadline}
-              onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
-              className="w-full md:w-1/3 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Mintavétel dátuma *
+              </label>
+              <div className="relative">
+                <input
+                  id="sampling_date"
+                  name="sampling_date"
+                  type="date"
+                  value={formData.sampling_date}
+                  onChange={(e) => setFormData({ ...formData, sampling_date: e.target.value })}
+                  className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  required
+                />
+                {/* Mai nap gomb */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date().toISOString().split('T')[0];
+                    setFormData({ ...formData, sampling_date: today });
+                  }}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded transition-colors flex items-center gap-1"
+                  title="Mai nap"
+                >
+                  <CalendarCheck className="w-3 h-3" />
+                  Ma
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Határidő
+                <span className="text-gray-400 ml-1">(opcionális)</span>
               </label>
               <input
                 id="deadline"
@@ -569,88 +456,51 @@ function RequestForm() {
           )}
         </div>
 
-        {/* v6.7: Minta feladás részletei */}
+        {/* Location Details */}
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Truck className="w-5 h-5 text-indigo-600" />
-            Minta feladás részletei
+            <MapPin className="w-5 h-5 text-indigo-600" />
+            Mintavétel részletei
           </h2>
 
-          {/* Logisztika választó - markáns */}
+          {/* Mintavétel helye */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Ki gondoskodik a minta eljuttatásáról? *
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Mintavétel helye *
             </label>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, logistics_type: 'sender' })}
-                className={`p-4 rounded-lg border-2 text-left transition-all ${
-                  formData.logistics_type === 'sender'
-                    ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200'
-                    : 'border-gray-300 bg-gray-50 hover:border-gray-400'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Building className={`w-6 h-6 ${formData.logistics_type === 'sender' ? 'text-indigo-600' : 'text-gray-400'}`} />
-                  <div>
-                    <div className="font-medium">Feladó gondoskodik</div>
-                    <p className="text-xs text-gray-500">Mi juttatjuk el a mintát a laborba</p>
-                  </div>
-                </div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setFormData({ ...formData, logistics_type: 'provider' })}
-                className={`p-4 rounded-lg border-2 text-left transition-all ${
-                  formData.logistics_type === 'provider'
-                    ? 'border-green-500 bg-green-50 ring-2 ring-green-200'
-                    : 'border-gray-300 bg-gray-50 hover:border-gray-400'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Truck className={`w-6 h-6 ${formData.logistics_type === 'provider' ? 'text-green-600' : 'text-gray-400'}`} />
-                  <div>
-                    <div className="font-medium">Szolgáltató szállít</div>
-                    <p className="text-xs text-gray-500">A labor küldjön futárt a mintáért</p>
-                  </div>
-                </div>
-              </button>
-            </div>
+            <input
+              id="sampling_location"
+              name="sampling_location"
+              type="text"
+              value={formData.sampling_location}
+              onChange={(e) => setFormData({ ...formData, sampling_location: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              required
+              placeholder="pl. Százhalombatta, finomító"
+            />
           </div>
 
-          {/* Szállítási cím - csak ha szolgáltató szállít */}
-          {formData.logistics_type === 'provider' && (
-            <div className="p-4 bg-green-50 rounded-lg border border-green-200 space-y-4">
-              <p className="text-sm text-green-800 font-medium flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                Szállítási adatok a futár számára
-              </p>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Pontos cím *
-                </label>
-                <input
-                  id="shipping_address"
-                  name="shipping_address"
-                  type="text"
-                  value={formData.shipping_address}
-                  onChange={(e) => setFormData({ ...formData, shipping_address: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  required={formData.logistics_type === 'provider'}
-                  placeholder="pl. 2440 Százhalombatta, Ipari út 42."
-                />
-              </div>
-            </div>
-          )}
+          {/* Pontos cím - ÚJ */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pontos cím *
+            </label>
+            <input
+              id="sampling_address"
+              name="sampling_address"
+              type="text"
+              value={formData.sampling_address}
+              onChange={(e) => setFormData({ ...formData, sampling_address: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              required
+              placeholder="pl. 2440 Százhalombatta, Ipari út 42."
+            />
+          </div>
 
-          {/* Kontakt személy és telefon - mindig látszik */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-gray-200">
+          {/* Kontakt személy - ÚJ */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                <User className="inline w-4 h-4 mr-1 text-gray-400" />
                 Kontakt személy *
               </label>
               <input
@@ -663,11 +513,13 @@ function RequestForm() {
                 required
                 placeholder="Alapértelmezett: feladó neve"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Aki a mintavétellel kapcsolatban kereshető
+              </p>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                <Phone className="inline w-4 h-4 mr-1 text-gray-400" />
                 Telefon *
               </label>
               <input
@@ -684,17 +536,17 @@ function RequestForm() {
           </div>
         </div>
 
-        {/* Test Types - v6.7 Kategória szerint, select all fejléccel */}
+        {/* Test Types - v6.6 Kategória szerint csoportosítva (VISSZA) */}
         <div className="bg-white rounded-lg shadow p-6 space-y-4">
           <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <FileText className="w-5 h-5 text-indigo-600" />
             Vizsgálatok
           </h2>
 
-          {/* Group by Category - v6.7 with select all */}
+          {/* Group by Category - v6.6 with collapsible and icons */}
           {categories
             .filter(cat => cat.is_active)
-            .filter(cat => cat.name !== 'Minta előkészítés')  // Elrejtés
+            .filter(cat => cat.name !== 'Minta előkészítés')  // 5. ELREJTÉS!
             .map((category, index) => {
             const categoryTests = testTypes.filter(tt => tt.category_id === category.id && tt.is_active);
             if (categoryTests.length === 0) return null;
@@ -702,11 +554,6 @@ function RequestForm() {
             const Icon = iconMap[category.icon] || Beaker;
             const isCollapsed = collapsedCategories[category.id];
             const isSamplePrep = category.name === 'Minta előkészítés';
-            
-            // v6.7: számláló
-            const selectedInCategory = categoryTests.filter(tt => selectedTests.includes(tt.id)).length;
-            const totalInCategory = categoryTests.length;
-            const allSelected = selectedInCategory === totalInCategory;
 
             // Helper function to get complementary light background
             const getCategoryBackground = (color) => {
@@ -778,28 +625,6 @@ function RequestForm() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {/* v6.7: Select all checkbox */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleAllInCategory(category.id);
-                      }}
-                      className="flex items-center gap-1 px-2 py-1 text-xs rounded border transition-colors"
-                      style={{
-                        borderColor: `${category.color}40`,
-                        backgroundColor: allSelected ? `${category.color}15` : 'white',
-                        color: category.color
-                      }}
-                      title={allSelected ? 'Mind kijelölésének törlése' : 'Mind kijelölése'}
-                    >
-                      {allSelected ? (
-                        <CheckSquare className="w-4 h-4" />
-                      ) : (
-                        <Square className="w-4 h-4" />
-                      )}
-                      <span>{selectedInCategory}/{totalInCategory}</span>
-                    </button>
                     <span className="text-sm text-gray-500">
                       {categoryTests.length} vizsgálat
                     </span>

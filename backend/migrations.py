@@ -71,106 +71,16 @@ MIGRATIONS = [
     },
     
     # ============================================================================
-    # v6.7 MIGRATIONS - TestType új oszlopok
-    # ============================================================================
-    {
-        'table': 'test_type',
-        'column': 'standard',
-        'definition': 'VARCHAR(100)',
-        'description': 'Szabvány (pl. MSZ EN ISO 3104)'
-    },
-    {
-        'table': 'test_type',
-        'column': 'device',
-        'definition': 'VARCHAR(200)',
-        'description': 'Készülék'
-    },
-    {
-        'table': 'test_type',
-        'column': 'cost_price',
-        'definition': 'FLOAT DEFAULT 0',
-        'description': 'Önköltség (Ft/minta)'
-    },
-    {
-        'table': 'test_type',
-        'column': 'measurement_time',
-        'definition': 'FLOAT DEFAULT 0',
-        'description': 'Mérési idő (óra)'
-    },
-    {
-        'table': 'test_type',
-        'column': 'sample_prep_time',
-        'definition': 'FLOAT DEFAULT 0',
-        'description': 'Mintaelőkészítési idő (óra)'
-    },
-    {
-        'table': 'test_type',
-        'column': 'evaluation_time',
-        'definition': 'FLOAT DEFAULT 0',
-        'description': 'Kiértékelés (óra)'
-    },
-    {
-        'table': 'test_type',
-        'column': 'turnaround_time',
-        'definition': 'FLOAT DEFAULT 0',
-        'description': 'Átfutási idő (óra)'
-    },
-    {
-        'table': 'test_type',
-        'column': 'sample_quantity',
-        'definition': 'FLOAT',
-        'description': 'Minta mennyiség (ml)'
-    },
-    {
-        'table': 'test_type',
-        'column': 'sample_prep_required',
-        'definition': 'BOOLEAN DEFAULT FALSE',
-        'description': 'Mintaelőkészítés szükséges'
-    },
-    {
-        'table': 'test_type',
-        'column': 'hazard_level',
-        'definition': 'VARCHAR(50)',
-        'description': 'Veszélyesség'
-    },
-    
-    # ============================================================================
-    # v6.7 MIGRATIONS - LabRequest új oszlopok
-    # ============================================================================
-    {
-        'table': 'lab_request',
-        'column': 'request_number',
-        'definition': 'VARCHAR(50)',
-        'description': 'Generált egyedi azonosító (pl. MOL-20241124-001)'
-    },
-    {
-        'table': 'lab_request',
-        'column': 'internal_id',
-        'definition': 'VARCHAR(100)',
-        'description': 'Céges belső azonosító'
-    },
-    {
-        'table': 'lab_request',
-        'column': 'sampling_datetime',
-        'definition': 'TIMESTAMP',
-        'description': 'Mintavétel időpontja (dátum + óra:perc)'
-    },
-    {
-        'table': 'lab_request',
-        'column': 'logistics_type',
-        'definition': "VARCHAR(50) DEFAULT 'sender'",
-        'description': 'Logisztika típusa (sender/provider)'
-    },
-    {
-        'table': 'lab_request',
-        'column': 'shipping_address',
-        'definition': 'VARCHAR(500)',
-        'description': 'Szállítási cím (ha szolgáltató szállít)'
-    },
-    
-    # ============================================================================
     # FUTURE MIGRATIONS - Add below this line
     # ============================================================================
+    
+    # Example future migration (commented out):
+    # {
+    #     'table': 'lab_request',
+    #     'column': 'estimated_completion',
+    #     'definition': 'TIMESTAMP',
+    #     'description': 'Estimated completion date'
+    # },
 ]
 
 # ============================================================================
