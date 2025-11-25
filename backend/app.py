@@ -108,7 +108,7 @@ class TestType(db.Model):
     # Alapadatok
     name = db.Column(db.String(200), nullable=False, unique=True)  # Rövid név
     description = db.Column(db.Text)  # Mérési szolgáltatás, leírás
-    standard = db.Column(db.String(200))  # Szabvány (pl. MSZ EN ISO 3104)
+    standard = db.Column(db.Text)  # Szabvány (lehet hosszú szöveg is)
     
     # Kategória és részleg
     category_id = db.Column(db.Integer, db.ForeignKey('request_category.id'), nullable=True)
@@ -2070,6 +2070,22 @@ def auto_migrate():
                 print("  ✅ sample_quantity converted to VARCHAR")
         except Exception as e:
             print(f"  ⚠️  sample_quantity type check/conversion skipped: {e}")
+            db.session.rollback()
+        
+        # v6.7: Fix standard column type (VARCHAR -> TEXT)
+        try:
+            result = db.session.execute(db.text("""
+                SELECT data_type, character_maximum_length FROM information_schema.columns 
+                WHERE table_name = 'test_type' AND column_name = 'standard'
+            """))
+            row = result.fetchone()
+            if row and row[0] == 'character varying' and row[1] and row[1] < 500:
+                print("  🔄 Converting standard from VARCHAR to TEXT...")
+                db.session.execute(db.text("ALTER TABLE test_type ALTER COLUMN standard TYPE TEXT"))
+                db.session.commit()
+                print("  ✅ standard converted to TEXT")
+        except Exception as e:
+            print(f"  ⚠️  standard type check/conversion skipped: {e}")
             db.session.rollback()
         
         return success

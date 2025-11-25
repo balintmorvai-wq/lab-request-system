@@ -76,8 +76,8 @@ MIGRATIONS = [
     {
         'table': 'test_type',
         'column': 'standard',
-        'definition': 'VARCHAR(200)',
-        'description': 'Szabvány (pl. MSZ EN ISO 3104)'
+        'definition': 'TEXT',
+        'description': 'Szabvány (lehet hosszú szöveg is)'
     },
     {
         'table': 'test_type',
