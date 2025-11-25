@@ -141,6 +141,12 @@ MIGRATIONS = [
     },
     
     # ============================================================================
+    # v6.7 TYPE CHANGES - Típus módosítások (ezeket kézzel kell futtatni!)
+    # ============================================================================
+    # Ha a sample_quantity oszlop FLOAT típusú, futtasd:
+    # ALTER TABLE test_type ALTER COLUMN sample_quantity TYPE VARCHAR(100);
+    
+    # ============================================================================
     # v6.7 MIGRATIONS - LabRequest új oszlopok
     # ============================================================================
     {

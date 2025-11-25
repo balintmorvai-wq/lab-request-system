@@ -2055,6 +2055,23 @@ def auto_migrate():
             for error in errors:
                 print(f"   {error}")
         
+        # v6.7: Fix sample_quantity column type (FLOAT -> VARCHAR)
+        try:
+            # Check if sample_quantity is FLOAT type and convert to VARCHAR
+            result = db.session.execute(db.text("""
+                SELECT data_type FROM information_schema.columns 
+                WHERE table_name = 'test_type' AND column_name = 'sample_quantity'
+            """))
+            row = result.fetchone()
+            if row and row[0] in ('double precision', 'real', 'numeric', 'float'):
+                print("  🔄 Converting sample_quantity from FLOAT to VARCHAR...")
+                db.session.execute(db.text("ALTER TABLE test_type ALTER COLUMN sample_quantity TYPE VARCHAR(100)"))
+                db.session.commit()
+                print("  ✅ sample_quantity converted to VARCHAR")
+        except Exception as e:
+            print(f"  ⚠️  sample_quantity type check/conversion skipped: {e}")
+            db.session.rollback()
+        
         return success
         
     except ImportError:
