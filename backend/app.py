@@ -108,7 +108,7 @@ class TestType(db.Model):
     # Alapadatok
     name = db.Column(db.String(200), nullable=False, unique=True)  # Rövid név
     description = db.Column(db.Text)  # Mérési szolgáltatás, leírás
-    standard = db.Column(db.String(100))  # Szabvány (pl. MSZ EN ISO 3104)
+    standard = db.Column(db.String(200))  # Szabvány (pl. MSZ EN ISO 3104)
     
     # Kategória és részleg
     category_id = db.Column(db.Integer, db.ForeignKey('request_category.id'), nullable=True)
@@ -121,15 +121,16 @@ class TestType(db.Model):
     
     # Időadatok (órában)
     measurement_time = db.Column(db.Float, default=0)  # Mérési idő (óra)
-    sample_prep_time = db.Column(db.Float, default=0)  # Mintaelőkészítési idő (óra)
+    sample_prep_time = db.Column(db.Float, default=0)  # Mintaelőkészítési idő (óra) - csak ha sample_prep_required=True
     evaluation_time = db.Column(db.Float, default=0)  # Kiértékelés (óra)
-    turnaround_time = db.Column(db.Float, default=0)  # Átfutási idő (óra) - számított vagy megadott
-    turnaround_days = db.Column(db.Integer, default=7)  # Legacy: napokban (backward compat)
+    turnaround_time = db.Column(db.Float, default=0)  # Átfutási idő (óra)
+    turnaround_days = db.Column(db.Integer, nullable=True)  # Átfutási idő napokban (admin tölti ki)
     
     # Minta adatok
-    sample_quantity = db.Column(db.Float)  # Minta mennyiség (ml)
-    sample_prep_required = db.Column(db.Boolean, default=False)  # Mintaelőkészítés szükséges
-    hazard_level = db.Column(db.String(50))  # Veszélyesség (pl. "Nem veszélyes", "Gyúlékony", "Mérgező")
+    sample_quantity = db.Column(db.String(100))  # Minta mennyiség (szabad szöveg, pl. "50-100 mg")
+    sample_prep_required = db.Column(db.Boolean, default=False)  # Mintaelőkészítés szükséges (igen/nem)
+    sample_prep_description = db.Column(db.String(200))  # Mintaelőkészítés típusa (pl. "Szárítás, mosás")
+    hazard_level = db.Column(db.String(200))  # Veszélyesség (szabad szöveg)
     
     # Státusz
     is_active = db.Column(db.Boolean, default=True)
@@ -622,9 +623,10 @@ def get_test_types(current_user):
         'turnaround_time': tt.turnaround_time,
         'measurement_time': tt.measurement_time,
         'sample_prep_time': tt.sample_prep_time,
+        'sample_prep_required': tt.sample_prep_required,
+        'sample_prep_description': tt.sample_prep_description,
         'evaluation_time': tt.evaluation_time,
         'sample_quantity': tt.sample_quantity,
-        'sample_prep_required': tt.sample_prep_required,
         'hazard_level': tt.hazard_level,
         'is_active': tt.is_active
     } for tt in test_types])
@@ -650,10 +652,21 @@ def create_test_type(current_user):
     new_test_type = TestType(
         name=data.get('name'),
         description=data.get('description'),
-        price=float(data.get('price')),
+        standard=data.get('standard'),
+        price=float(data.get('price', 0)),
+        cost_price=float(data.get('cost_price', 0)) if data.get('cost_price') else 0,
         department_id=department_id,
         category_id=category_id,
-        turnaround_days=int(data.get('turnaround_days', 7)),
+        device=data.get('device'),
+        turnaround_days=int(data.get('turnaround_days')) if data.get('turnaround_days') else None,
+        turnaround_time=float(data.get('turnaround_time', 0)) if data.get('turnaround_time') else 0,
+        measurement_time=float(data.get('measurement_time', 0)) if data.get('measurement_time') else 0,
+        sample_prep_time=float(data.get('sample_prep_time', 0)) if data.get('sample_prep_time') else 0,
+        sample_prep_required=data.get('sample_prep_required', False),
+        sample_prep_description=data.get('sample_prep_description'),
+        evaluation_time=float(data.get('evaluation_time', 0)) if data.get('evaluation_time') else 0,
+        sample_quantity=data.get('sample_quantity'),
+        hazard_level=data.get('hazard_level'),
         is_active=data.get('is_active', True)
     )
     db.session.add(new_test_type)
@@ -671,16 +684,36 @@ def update_test_type(current_user, test_type_id):
         test_type.name = data['name']
     if 'description' in data:
         test_type.description = data['description']
+    if 'standard' in data:
+        test_type.standard = data['standard']
     if 'price' in data:
         test_type.price = float(data['price'])
+    if 'cost_price' in data:
+        test_type.cost_price = float(data['cost_price']) if data['cost_price'] else 0
     if 'department_id' in data:
-        # Üres string esetén None
         test_type.department_id = data['department_id'] if data['department_id'] != '' else None
     if 'category_id' in data:
-        # Üres string esetén None
         test_type.category_id = data['category_id'] if data['category_id'] != '' else None
+    if 'device' in data:
+        test_type.device = data['device']
     if 'turnaround_days' in data:
-        test_type.turnaround_days = int(data['turnaround_days'])
+        test_type.turnaround_days = int(data['turnaround_days']) if data['turnaround_days'] else None
+    if 'turnaround_time' in data:
+        test_type.turnaround_time = float(data['turnaround_time']) if data['turnaround_time'] else 0
+    if 'measurement_time' in data:
+        test_type.measurement_time = float(data['measurement_time']) if data['measurement_time'] else 0
+    if 'sample_prep_time' in data:
+        test_type.sample_prep_time = float(data['sample_prep_time']) if data['sample_prep_time'] else 0
+    if 'sample_prep_required' in data:
+        test_type.sample_prep_required = data['sample_prep_required']
+    if 'sample_prep_description' in data:
+        test_type.sample_prep_description = data['sample_prep_description']
+    if 'evaluation_time' in data:
+        test_type.evaluation_time = float(data['evaluation_time']) if data['evaluation_time'] else 0
+    if 'sample_quantity' in data:
+        test_type.sample_quantity = data['sample_quantity']
+    if 'hazard_level' in data:
+        test_type.hazard_level = data['hazard_level']
     if 'is_active' in data:
         test_type.is_active = data['is_active']
     
@@ -714,6 +747,8 @@ def get_test_type_details(test_type_ids):
             'turnaround_time': tt.turnaround_time,
             'measurement_time': tt.measurement_time,
             'sample_prep_time': tt.sample_prep_time,
+            'sample_prep_required': tt.sample_prep_required,
+            'sample_prep_description': tt.sample_prep_description,
             'evaluation_time': tt.evaluation_time,
             'sample_quantity': tt.sample_quantity,
             'hazard_level': tt.hazard_level,
@@ -1389,36 +1424,53 @@ def get_stats(current_user):
 
 # --- v6.7 Data Definitions ---
 V67_CATEGORIES = [
-    {'name': 'Minta előkészítés', 'description': 'Mintavétel, előkészítés, homogenizálás', 'color': '#6366F1', 'icon': 'Package'},
     {'name': 'Anyagvizsgálat', 'description': 'Anyagösszetétel és tulajdonságok meghatározása', 'color': '#0EA5E9', 'icon': 'Beaker'},
     {'name': 'Kromatográfia', 'description': 'Gáz- és folyadékkromatográfiás vizsgálatok', 'color': '#8B5CF6', 'icon': 'BarChart3'},
     {'name': 'Fizikai tulajdonság', 'description': 'Fizikai jellemzők mérése (viszkozitás, sűrűség, stb.)', 'color': '#F59E0B', 'icon': 'Gauge'},
 ]
 
-def get_v67_test_types(cat_minta_id, cat_anyag_id, cat_krom_id, cat_fizikai_id, dept_id):
-    """Return v6.7 test type definitions"""
+def get_v67_test_types(cat_anyag_id, cat_krom_id, cat_fizikai_id):
+    """Return v6.7 test type definitions from Excel spec"""
     return [
-        # Minta előkészítés
-        {'name': 'Mintavétel (helyszíni)', 'category_id': cat_minta_id, 'department_id': dept_id, 'price': 15000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 3170', 'sample_quantity': 1000, 'turnaround_time': 8, 'sample_prep_time': 0.5, 'measurement_time': 1, 'evaluation_time': 0.5},
-        {'name': 'Minta homogenizálás', 'category_id': cat_minta_id, 'department_id': dept_id, 'price': 8000, 'turnaround_days': 1, 'standard': 'Belső eljárás', 'sample_quantity': 100, 'turnaround_time': 8, 'sample_prep_time': 0.25, 'measurement_time': 0.5, 'evaluation_time': 0.25},
         # Anyagvizsgálat
-        {'name': 'Elemanalízis (ICP-OES)', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 45000, 'turnaround_days': 3, 'standard': 'MSZ EN ISO 11885', 'device': 'Thermo iCAP 7400', 'sample_quantity': 50, 'turnaround_time': 24, 'sample_prep_time': 1, 'measurement_time': 0.75, 'evaluation_time': 1, 'sample_prep_required': True},
-        {'name': 'Kéntartalom meghatározás', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 25000, 'turnaround_days': 2, 'standard': 'MSZ EN ISO 20846', 'device': 'Horiba SLFA-2100', 'sample_quantity': 20, 'turnaround_time': 16, 'sample_prep_time': 0.5, 'measurement_time': 0.33, 'evaluation_time': 0.5},
-        {'name': 'Víztartalom (Karl-Fischer)', 'category_id': cat_anyag_id, 'department_id': dept_id, 'price': 18000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 12937', 'device': 'Metrohm 899', 'sample_quantity': 10, 'turnaround_time': 8, 'sample_prep_time': 0.25, 'measurement_time': 0.25, 'evaluation_time': 0.33},
+        {'name': 'CHNS', 'description': 'Szén-, hidrogén-, oxigén- és kéntartalom meghatározása', 'category_id': cat_anyag_id, 'price': 23800, 'measurement_time': 1, 'sample_prep_required': True, 'sample_prep_description': 'Szárítás, mosás', 'sample_prep_time': 0.1, 'evaluation_time': 0.1, 'turnaround_time': 1.2, 'sample_quantity': '50-100 mg'},
+        {'name': 'IR', 'description': 'Funkciós csoport meghatározás', 'category_id': cat_anyag_id, 'price': 25000, 'measurement_time': 0.7, 'sample_prep_time': 0.3, 'evaluation_time': 0.5, 'turnaround_time': 1.5, 'sample_quantity': '100 mg'},
+        {'name': 'XRF', 'description': 'Elemi összetétel meghatározása', 'category_id': cat_anyag_id, 'price': 24400, 'measurement_time': 0.7, 'sample_prep_time': 0.2, 'evaluation_time': 0.3, 'turnaround_time': 1.2, 'sample_quantity': '1-4 g'},
+        {'name': 'XRD', 'description': 'Ásványi összetétel minőségi meghatározása', 'category_id': cat_anyag_id, 'price': 25850, 'measurement_time': 1, 'sample_prep_time': 0.5, 'evaluation_time': 0.5, 'turnaround_time': 2, 'sample_quantity': '1-4 g'},
+        {'name': 'SEM-EDX', 'description': 'Morfológia, mikorszerkezet tanulmányozása. Elemösszetétel meghatározása', 'category_id': cat_anyag_id, 'price': 39000, 'measurement_time': 2, 'sample_prep_time': 0.5, 'evaluation_time': 0.5, 'turnaround_time': 3, 'sample_quantity': '50-100 mg'},
+        {'name': 'NMR folydék', 'description': 'Folyadékminták, oldható minták vizsgálata komplex szerkezeti visgálata', 'category_id': cat_anyag_id, 'price': 100000, 'measurement_time': 1, 'sample_prep_time': 0.2, 'evaluation_time': 0.7, 'turnaround_time': 1.9},
+        {'name': 'NMR szilárd', 'description': 'Szilárd minták komplex szerkezeti vizsgálata', 'category_id': cat_anyag_id, 'price': 90000, 'measurement_time': 1, 'sample_prep_time': 0.2, 'evaluation_time': 0.7, 'turnaround_time': 1.9},
+        {'name': 'ICP-OES', 'description': 'Elemi összetétel meghatározása feltárással Na-U-ig alacsony koncentrációban pl. ppm', 'category_id': cat_anyag_id, 'price': 13000, 'measurement_time': 1, 'sample_prep_required': True, 'sample_prep_description': 'Savas feltárás', 'sample_prep_time': 3, 'evaluation_time': 0.4, 'turnaround_time': 4.4},
+        {'name': 'IR mikroszkóp', 'description': 'Mikro analitika funkciós csoport meghatározása', 'category_id': cat_anyag_id, 'price': 27700, 'measurement_time': 1, 'sample_prep_time': 0.2, 'evaluation_time': 0.5, 'turnaround_time': 1.7},
+        {'name': 'Víztartalom KF', 'description': 'Ásványolajtermékek és bioüzemanyagok víztartamának meghatározása Karl-Fischer titrálással ( MKA-610 x MKC-610)', 'standard': 'Víztartalom meghatározása Karl-Fischer titrálással automata berendezés segítségével.', 'category_id': cat_anyag_id, 'price': 10000, 'measurement_time': 0.6, 'sample_prep_time': 0.2, 'evaluation_time': 0.1, 'turnaround_time': 0.9},
+        {'name': 'S/N', 'description': 'Folyadékok kén- és nitrogéntartalmának meghatározása (Analytik Jena Multi EA-3100)', 'standard': 'Oxidációs kamrával és UV fluoreszcenciás és kemilumineszcenciás detektorokkal felszerelt készülék foladékmintákhoz.', 'category_id': cat_anyag_id, 'price': 12000, 'measurement_time': 1, 'sample_prep_time': 0.2, 'evaluation_time': 0.2, 'turnaround_time': 1.4},
+        
         # Kromatográfia
-        {'name': 'GC-MS analízis', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 55000, 'turnaround_days': 3, 'standard': 'ASTM D2887', 'device': 'Agilent 8890 GC/5977B MS', 'sample_quantity': 5, 'turnaround_time': 24, 'sample_prep_time': 0.75, 'measurement_time': 1.5, 'evaluation_time': 1, 'sample_prep_required': True, 'hazard_level': 'medium'},
-        {'name': 'HPLC analízis', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 48000, 'turnaround_days': 2, 'standard': 'MSZ EN 12916', 'device': 'Waters Alliance e2695', 'sample_quantity': 10, 'turnaround_time': 16, 'sample_prep_time': 0.5, 'measurement_time': 1, 'evaluation_time': 0.75, 'sample_prep_required': True},
-        {'name': 'Szénhidrogén típus (PIONA)', 'category_id': cat_krom_id, 'department_id': dept_id, 'price': 65000, 'turnaround_days': 4, 'standard': 'ASTM D6839', 'device': 'AC Reformulyzer M4', 'sample_quantity': 5, 'turnaround_time': 32, 'sample_prep_time': 1, 'measurement_time': 2, 'evaluation_time': 1.5, 'sample_prep_required': True},
+        {'name': 'GC-MS mérés', 'description': 'GC-MS mérés', 'category_id': cat_krom_id, 'price': 90000, 'measurement_time': 3, 'sample_prep_time': 0.1, 'evaluation_time': 0.8, 'turnaround_time': 3.9},
+        {'name': 'HPLC mérés', 'description': 'HPLC mérés', 'category_id': cat_krom_id, 'price': 40000, 'measurement_time': 2, 'sample_prep_time': 0.3, 'evaluation_time': 0.3, 'turnaround_time': 2.6},
+        {'name': 'GC-MS módszer fejlesztés', 'description': 'GC-MS módszer fejlesztés (egyedi ár)', 'category_id': cat_krom_id, 'price': 0, 'turnaround_time': 0},
+        {'name': 'HPLC módszer fejlesztés', 'description': 'HPLC/UPLC/GPC módszer fejlesztés (egyedi ár)', 'category_id': cat_krom_id, 'price': 0, 'turnaround_time': 0},
+        {'name': 'GC összertétel', 'description': 'Ásványolajterrmékek és biomotorhajtóanyagok összetételének meghatározása gázkromatográfiás vizsgálattal (Shimadzu GC2010)', 'standard': 'Szénhidrogén-összetétel meghatározása FID detektorral szerelt gázkromatográfiás készülékkel.', 'category_id': cat_krom_id, 'price': 80000, 'measurement_time': 3, 'sample_prep_time': 0.5, 'evaluation_time': 1, 'turnaround_time': 4.5},
+        {'name': 'Aromástartalom HPLC', 'description': 'Gázolajok aromástartalmának meghatározása HPLC-vel (Shimadzu LC20)', 'standard': 'ASTM D6591', 'category_id': cat_krom_id, 'price': 20000, 'measurement_time': 1.2, 'sample_prep_time': 0.2, 'evaluation_time': 0.3, 'turnaround_time': 1.7},
+        
         # Fizikai tulajdonság
-        {'name': 'Kinematikus viszkozitás', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 12000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 3104', 'device': 'Cannon-Fenske', 'sample_quantity': 50, 'turnaround_time': 8, 'sample_prep_time': 0.33, 'measurement_time': 0.5, 'evaluation_time': 0.25},
-        {'name': 'Sűrűség (digitális)', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 8000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 12185', 'device': 'Anton Paar DMA 4500', 'sample_quantity': 10, 'turnaround_time': 8, 'sample_prep_time': 0.17, 'measurement_time': 0.17, 'evaluation_time': 0.17},
-        {'name': 'Lobbanáspont (zárttéri)', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 15000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 2719', 'device': 'Pensky-Martens', 'sample_quantity': 100, 'turnaround_time': 8, 'sample_prep_time': 0.25, 'measurement_time': 0.75, 'evaluation_time': 0.25, 'hazard_level': 'high'},
-        {'name': 'Dermedéspont', 'category_id': cat_fizikai_id, 'department_id': dept_id, 'price': 14000, 'turnaround_days': 1, 'standard': 'MSZ EN ISO 3016', 'sample_quantity': 50, 'turnaround_time': 8, 'sample_prep_time': 0.25, 'measurement_time': 1, 'evaluation_time': 0.25},
+        {'name': 'Engler desztilláció', 'description': 'Ásványolajtermékek (motorhajtóanyagok) és biomotorhajtóanyagok Engler desztillációja (TANAKA AD6)', 'standard': 'ASTM D86', 'category_id': cat_fizikai_id, 'price': 12000, 'measurement_time': 1, 'sample_prep_time': 0.1, 'evaluation_time': 0.2, 'turnaround_time': 1.3},
+        {'name': 'Kinematikai viszkozitás', 'description': 'Ásványolajtermékek és egyéb folyadékok kinematikai viszkozitásának meghatározása (Cannon Mini AV) (40 és 100°C)', 'standard': 'ASTMD445', 'category_id': cat_fizikai_id, 'price': 10000, 'measurement_time': 0.5, 'sample_prep_time': 0.1, 'evaluation_time': 0.1, 'turnaround_time': 0.7},
+        {'name': 'Sűrűség és törésmutató', 'description': 'Ásványolajtermékek és egyéb folyadékok sűrűségének és törésmutatójának meghatározása (Anton Paar DMA 4500 M x Abbemat 300)', 'standard': 'Univerzális (12 db ASTM szabványnak - pl. D4052 - megfelelő) automata sűrűségmérő készülék kapcsolt törésmutató mérővel (6 db ASTM szabványnak megfelelő mérés).', 'category_id': cat_fizikai_id, 'price': 10000, 'measurement_time': 0.5, 'sample_prep_time': 0.1, 'evaluation_time': 0.1, 'turnaround_time': 0.7},
+        {'name': 'Kokszosodási maradék', 'description': 'Ásványolajtermékek kokszosodási maradékának meghatározása mikro módszerrel (TANAKA ACR-M3)', 'standard': 'ASTM D4530, ISO10370, IP398', 'category_id': cat_fizikai_id, 'price': 12000, 'measurement_time': 0.5, 'sample_prep_time': 0.1, 'evaluation_time': 0.2, 'turnaround_time': 0.8},
+        {'name': 'Nemkormozó lángmagasság', 'description': 'Petróleum forráspont-tartományú szénhidrogének (pl. sugárhajtómű üzemanyagok) nemkormozó lángmagasságának meghatározása (DC Scientific SP10)', 'standard': 'ASTM D1322, IP 598, JIS K2537', 'category_id': cat_fizikai_id, 'price': 10000, 'measurement_time': 0.5, 'sample_prep_time': 0.1, 'evaluation_time': 0.1, 'turnaround_time': 0.7},
+        {'name': 'Gőznyomás', 'description': 'Motorbenzinek és egyéb szénhidrogének gőznyomásának meghatározása (Eralytics Eravap)', 'standard': 'ASTM D5191', 'category_id': cat_fizikai_id, 'price': 10000, 'measurement_time': 0.6, 'sample_prep_time': 0.1, 'evaluation_time': 0.2, 'turnaround_time': 0.9},
+        {'name': 'Lobbanáspont', 'description': 'Ásványolajtermékek nyílttéri- vagy zárttéri lobbanáspontjának meghatározása', 'category_id': cat_fizikai_id, 'price': 10000, 'measurement_time': 0.6, 'sample_prep_time': 0.1, 'evaluation_time': 0.2, 'turnaround_time': 0.9},
+        {'name': 'ASTM szín', 'description': 'Ásványolajtermékek ASTM színének meghatározása (SETA Lovibond)', 'standard': 'ASTM szín meghatározása szín-összehasonlítással', 'category_id': cat_fizikai_id, 'price': 6000, 'measurement_time': 0.2, 'sample_prep_time': 0.1, 'evaluation_time': 0.1, 'turnaround_time': 0.4},
+        {'name': 'CFPP', 'description': 'Középpárlatok hidegszűrhetőségi határhőmérsékletének meghatározása (TANAKA AFP-102)', 'standard': 'ASTM D 6371', 'category_id': cat_fizikai_id, 'price': 12000, 'measurement_time': 0.6, 'sample_prep_time': 0.2, 'evaluation_time': 0.1, 'turnaround_time': 0.9},
+        {'name': 'Zavarosodás, Dermedés, Kristályosodási pont', 'description': 'Ásványolajtermékek zavarosodás- dermedés- és kristályosodáspontjának meghatározása (Phase Series 70X)', 'standard': 'ASTM D5949, D5773, D5972', 'category_id': cat_fizikai_id, 'price': 12000, 'measurement_time': 0.6, 'sample_prep_time': 0.2, 'evaluation_time': 0.1, 'turnaround_time': 0.9},
+        {'name': 'Lágyuláspont', 'description': 'Paraffinok lágyuláspontjának meghatározása', 'standard': 'ASTM D3954-15', 'category_id': cat_fizikai_id, 'price': 6000, 'measurement_time': 0.3, 'sample_prep_time': 0.1, 'evaluation_time': 0.1, 'turnaround_time': 0.5},
+        {'name': 'CT', 'description': 'Két-, ill. háromdimenziós képalkotású CT vizsgálat', 'category_id': cat_fizikai_id, 'price': 28600, 'measurement_time': 3, 'sample_prep_time': 0.5, 'evaluation_time': 0.6, 'turnaround_time': 4.1},
     ]
 
 # --- Ensure v6.7 Data (runs on every startup) ---
 def ensure_v67_data():
-    """Ensure v6.7 categories exist and update ALL test types with new fields"""
+    """Ensure v6.7 categories exist and add new test types if needed"""
     print("  🔄 Checking v6.7 data...")
     
     # 1. Ensure v6.7 categories exist
@@ -1431,25 +1483,18 @@ def ensure_v67_data():
     db.session.commit()
     
     # 2. Get category IDs
-    cat_minta = RequestCategory.query.filter_by(name='Minta előkészítés').first()
     cat_anyag = RequestCategory.query.filter_by(name='Anyagvizsgálat').first()
     cat_krom = RequestCategory.query.filter_by(name='Kromatográfia').first()
     cat_fizikai = RequestCategory.query.filter_by(name='Fizikai tulajdonság').first()
     
-    # 3. Default department
-    dept = Department.query.first()
-    dept_id = dept.id if dept else None
-    
-    # 4. Get v6.7 test types
+    # 3. Get v6.7 test types
     v67_test_types = get_v67_test_types(
-        cat_minta.id if cat_minta else None,
         cat_anyag.id if cat_anyag else None,
         cat_krom.id if cat_krom else None,
-        cat_fizikai.id if cat_fizikai else None,
-        dept_id
+        cat_fizikai.id if cat_fizikai else None
     )
     
-    # 5. Add new test types if they don't exist
+    # 4. Add new test types if they don't exist
     for tt_data in v67_test_types:
         existing = TestType.query.filter_by(name=tt_data['name']).first()
         if not existing:
@@ -1457,34 +1502,6 @@ def ensure_v67_data():
             db.session.add(new_tt)
             print(f"    ✅ Vizsgálat létrehozva: {tt_data['name']}")
     db.session.commit()
-    
-    # 6. Update ALL existing test types with default values for new v6.7 fields if empty
-    all_test_types = TestType.query.all()
-    updated_count = 0
-    for tt in all_test_types:
-        needs_update = False
-        # Set defaults for empty v6.7 fields (values in hours)
-        if tt.sample_prep_time is None or tt.sample_prep_time == 0:
-            tt.sample_prep_time = 0.5  # default 0.5 óra (30 perc)
-            needs_update = True
-        if tt.measurement_time is None or tt.measurement_time == 0:
-            tt.measurement_time = 1.0  # default 1 óra
-            needs_update = True
-        if tt.evaluation_time is None or tt.evaluation_time == 0:
-            tt.evaluation_time = 0.5  # default 0.5 óra (30 perc)
-            needs_update = True
-        if tt.sample_quantity is None or tt.sample_quantity == 0:
-            tt.sample_quantity = 50  # default 50 mL
-            needs_update = True
-        if tt.turnaround_time is None or tt.turnaround_time == 0:
-            tt.turnaround_time = (tt.turnaround_days or 1) * 8  # turnaround_days * 8 óra
-            needs_update = True
-        if needs_update:
-            updated_count += 1
-    
-    if updated_count > 0:
-        db.session.commit()
-        print(f"    📝 {updated_count} vizsgálat frissítve alapértelmezett v6.7 értékekkel")
     
     print("  ✅ v6.7 adatok rendben!")
 
@@ -1509,18 +1526,14 @@ def update_seed_data():
         db.session.commit()
         
         # Get category IDs
-        cat_minta = RequestCategory.query.filter_by(name='Minta előkészítés').first()
         cat_anyag = RequestCategory.query.filter_by(name='Anyagvizsgálat').first()
         cat_krom = RequestCategory.query.filter_by(name='Kromatográfia').first()
         cat_fizikai = RequestCategory.query.filter_by(name='Fizikai tulajdonság').first()
-        dept = Department.query.first()
         
         v67_test_types = get_v67_test_types(
-            cat_minta.id if cat_minta else None,
             cat_anyag.id if cat_anyag else None,
             cat_krom.id if cat_krom else None,
-            cat_fizikai.id if cat_fizikai else None,
-            dept.id if dept else None
+            cat_fizikai.id if cat_fizikai else None
         )
         
         # Update or create test types

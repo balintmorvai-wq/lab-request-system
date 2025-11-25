@@ -76,7 +76,7 @@ MIGRATIONS = [
     {
         'table': 'test_type',
         'column': 'standard',
-        'definition': 'VARCHAR(100)',
+        'definition': 'VARCHAR(200)',
         'description': 'Szabvány (pl. MSZ EN ISO 3104)'
     },
     {
@@ -118,20 +118,26 @@ MIGRATIONS = [
     {
         'table': 'test_type',
         'column': 'sample_quantity',
-        'definition': 'FLOAT',
-        'description': 'Minta mennyiség (ml)'
+        'definition': 'VARCHAR(100)',
+        'description': 'Minta mennyiség (szabad szöveg, pl. 50-100 mg)'
     },
     {
         'table': 'test_type',
         'column': 'sample_prep_required',
         'definition': 'BOOLEAN DEFAULT FALSE',
-        'description': 'Mintaelőkészítés szükséges'
+        'description': 'Mintaelőkészítés szükséges (igen/nem)'
+    },
+    {
+        'table': 'test_type',
+        'column': 'sample_prep_description',
+        'definition': 'VARCHAR(200)',
+        'description': 'Mintaelőkészítés típusa (pl. Szárítás, mosás)'
     },
     {
         'table': 'test_type',
         'column': 'hazard_level',
-        'definition': 'VARCHAR(50)',
-        'description': 'Veszélyesség'
+        'definition': 'VARCHAR(200)',
+        'description': 'Veszélyesség (szabad szöveg)'
     },
     
     # ============================================================================
