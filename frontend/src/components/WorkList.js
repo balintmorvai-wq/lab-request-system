@@ -281,10 +281,23 @@ function WorkList() {
                     {/* Jobb oldal - Műveletek */}
                     <button
                       onClick={() => navigate(`/test-results/${request.id}`)}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                        user?.role === 'super_admin' && request.status === 'validation_pending'
+                          ? 'bg-purple-600 text-white hover:bg-purple-700'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
                     >
-                      <Play className="w-4 h-4" />
-                      Végrehajtás
+                      {user?.role === 'super_admin' && request.status === 'validation_pending' ? (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          Validálás
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          Végrehajtás
+                        </>
+                      )}
                     </button>
                   </div>
                 </div>

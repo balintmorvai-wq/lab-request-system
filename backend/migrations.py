@@ -196,6 +196,28 @@ MIGRATIONS = [
     # ============================================================================
     # FUTURE MIGRATIONS - Add below this line
     # ============================================================================
+    
+    # ============================================================================
+    # v7.0.4 MIGRATIONS - Admin Validation
+    # ============================================================================
+    {
+        'table': 'test_result',
+        'column': 'validated_by_user_id',
+        'definition': 'INTEGER REFERENCES "user"(id)',
+        'description': 'Admin aki validálta az eredményt'
+    },
+    {
+        'table': 'test_result',
+        'column': 'validated_at',
+        'definition': 'TIMESTAMP',
+        'description': 'Validálás időpontja'
+    },
+    {
+        'table': 'test_result',
+        'column': 'rejection_reason',
+        'definition': 'TEXT',
+        'description': 'Elutasítás indoklása (ha visszaküldve)'
+    },
 ]
 
 # ============================================================================

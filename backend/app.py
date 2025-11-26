@@ -228,9 +228,14 @@ class TestResult(db.Model):
     attachment_filename = db.Column(db.String(200))  # Csatolt fájl neve
     
     # Státusz és követés
-    status = db.Column(db.String(50), default='pending')  # 'pending', 'completed'
+    status = db.Column(db.String(50), default='pending')  # 'pending', 'in_progress', 'validation_pending', 'completed', 'rejected'
     completed_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Ki töltötte ki
     completed_at = db.Column(db.DateTime)  # Mikor töltötte ki
+    
+    # v7.0.3: Admin validation
+    validated_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Admin aki validálta
+    validated_at = db.Column(db.DateTime, nullable=True)  # Mikor validálta
+    rejection_reason = db.Column(db.Text, nullable=True)  # Elutasítás indoka
     
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
@@ -239,7 +244,8 @@ class TestResult(db.Model):
     # Kapcsolatok
     lab_request = db.relationship('LabRequest', backref='test_results')
     test_type = db.relationship('TestType', backref='test_results')
-    completed_by = db.relationship('User', backref='completed_test_results')
+    completed_by = db.relationship('User', foreign_keys=[completed_by_user_id], backref='completed_test_results')
+    validated_by = db.relationship('User', foreign_keys=[validated_by_user_id], backref='validated_test_results')  # v7.0.3
 
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1479,6 +1485,96 @@ def submit_for_validation(current_user, request_id):
         )
     
     return jsonify({'message': 'Kérés validálásra küldve!'})
+
+@app.route('/api/test-results/<int:result_id>/validate', methods=['PUT'])
+@token_required
+def validate_test_result(current_user, result_id):
+    """
+    v7.0.3: Admin validálja az egyes vizsgálati eredményeket
+    """
+    if current_user.role != 'super_admin':
+        return jsonify({'message': 'Csak adminok validálhatnak!'}), 403
+    
+    result = TestResult.query.get_or_404(result_id)
+    data = request.get_json()
+    action = data.get('action')  # 'approve' vagy 'reject'
+    
+    if action == 'approve':
+        result.status = 'completed'
+        result.validated_by_user_id = current_user.id
+        result.validated_at = datetime.datetime.utcnow()
+        result.rejection_reason = None
+        message = 'Eredmény elfogadva!'
+    elif action == 'reject':
+        result.status = 'in_progress'  # Vissza labor staff-hez
+        result.validated_by_user_id = None
+        result.validated_at = None
+        result.rejection_reason = data.get('rejection_reason', 'Nincs megadva ok')
+        message = 'Eredmény visszaküldve javításra!'
+    else:
+        return jsonify({'message': 'Érvénytelen művelet!'}), 400
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': message,
+        'result': {
+            'id': result.id,
+            'status': result.status,
+            'validated_at': result.validated_at.isoformat() if result.validated_at else None,
+            'rejection_reason': result.rejection_reason
+        }
+    })
+
+@app.route('/api/requests/<int:request_id>/complete-validation', methods=['POST'])
+@token_required
+def complete_request_validation(current_user, request_id):
+    """
+    v7.0.3: Admin lezárja a kérést - minden vizsgálat validált
+    """
+    if current_user.role != 'super_admin':
+        return jsonify({'message': 'Csak adminok zárhatnak le kérést!'}), 403
+    
+    req = LabRequest.query.get_or_404(request_id)
+    
+    if req.status != 'validation_pending':
+        return jsonify({'message': 'A kérés nincs validálásra váró státuszban!'}), 400
+    
+    # Ellenőrizzük, hogy minden vizsgálat completed-e
+    results = TestResult.query.filter_by(lab_request_id=request_id).all()
+    incomplete_results = [r for r in results if r.status != 'completed']
+    
+    if incomplete_results:
+        test_names = []
+        for r in incomplete_results:
+            tt = TestType.query.get(r.test_type_id)
+            test_names.append(tt.name if tt else f'ID: {r.test_type_id}')
+        
+        return jsonify({
+            'message': 'Nem minden vizsgálat van validálva!',
+            'incomplete_tests': test_names
+        }), 400
+    
+    # Összes vizsgálat validált → Kérés lezárása
+    req.status = 'completed'
+    db.session.commit()
+    
+    # Értesítés a feladónak
+    create_notification(
+        req.user_id,
+        req.id,
+        'completed',
+        f'A laborkérés elkészült: {req.request_number}'
+    )
+    
+    return jsonify({
+        'message': 'Kérés sikeresen lezárva!',
+        'request': {
+            'id': req.id,
+            'status': req.status,
+            'request_number': req.request_number
+        }
+    })
 
 @app.route('/api/requests/<int:request_id>/attachment', methods=['GET'])
 @token_required
