@@ -15,6 +15,7 @@ function UserManagement() {
   const { user, getAuthHeaders, API_URL } = useAuth();
   const [users, setUsers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [departments, setDepartments] = useState([]);  // v7.0.1: Departments
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -27,18 +28,21 @@ function UserManagement() {
     name: '',
     role: 'company_user',
     company_id: '',
+    department_id: '',  // v7.0.1: Department
     phone: ''
   });
 
   const fetchData = useCallback(async () => {
     try {
-      const [usersRes, companiesRes] = await Promise.all([
+      const [usersRes, companiesRes, departmentsRes] = await Promise.all([
         axios.get(`${API_URL}/users`, { headers: getAuthHeaders() }),
-        axios.get(`${API_URL}/companies`, { headers: getAuthHeaders() })
+        axios.get(`${API_URL}/companies`, { headers: getAuthHeaders() }),
+        axios.get(`${API_URL}/departments`, { headers: getAuthHeaders() })  // v7.0.1
       ]);
       
       setUsers(usersRes.data);
       setCompanies(companiesRes.data);
+      setDepartments(departmentsRes.data);  // v7.0.1
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -53,30 +57,33 @@ function UserManagement() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
-    console.log('📤 SUBMIT CLICKED');
-    console.log('editingId:', editingId);
-    console.log('formData:', formData);
+
+    // v7.0.1: Validation - labor_staff requires department
+    if (formData.role === 'labor_staff' && !formData.department_id) {
+      setError('Labor munkatársnál kötelező a szervezeti egység megadása!');
+      return;
+    }
 
     try {
+      const dataToSend = { ...formData };
+      
+      // Don't send empty password on edit
+      if (editingId && !dataToSend.password) {
+        delete dataToSend.password;
+      }
+
+      // Convert empty strings to null
+      if (!dataToSend.company_id) dataToSend.company_id = null;
+      if (!dataToSend.department_id) dataToSend.department_id = null;  // v7.0.1
+
       if (editingId) {
-        // Update existing user
-        console.log('🔄 Updating user:', editingId);
-        await axios.put(
-          `${API_URL}/users/${editingId}`,
-          formData,
-          { headers: getAuthHeaders() }
-        );
-        console.log('✅ User updated successfully');
+        await axios.put(`${API_URL}/users/${editingId}`, dataToSend, { 
+          headers: getAuthHeaders() 
+        });
       } else {
-        // Create new user
-        console.log('➕ Creating new user');
-        await axios.post(
-          `${API_URL}/users`,
-          formData,
-          { headers: getAuthHeaders() }
-        );
-        console.log('✅ User created successfully');
+        await axios.post(`${API_URL}/users`, dataToSend, { 
+          headers: getAuthHeaders() 
+        });
       }
       
       setShowModal(false);
@@ -87,76 +94,59 @@ function UserManagement() {
         name: '',
         role: 'company_user',
         company_id: '',
+        department_id: '',  // v7.0.1
         phone: ''
       });
       fetchData();
-    } catch (err) {
-      console.error('❌ Submit error:', err);
-      console.error('Error response:', err.response?.data);
-      setError(err.response?.data?.message || 'Hiba történt a művelet során');
+    } catch (error) {
+      setError(error.response?.data?.message || 'Hiba történt a mentés során!');
     }
   };
 
   const handleEdit = (user) => {
-    console.log('🔧 EDIT CLICKED:', user);
     setEditingId(user.id);
     setFormData({
       email: user.email,
-      password: '', // Don't populate password for security
+      password: '',
       name: user.name,
       role: user.role,
       company_id: user.company_id || '',
+      department_id: user.department_id || '',  // v7.0.1
       phone: user.phone || ''
-    });
-    console.log('✅ Edit modal opening with formData:', {
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      company_id: user.company_id,
-      editingId: user.id
     });
     setShowModal(true);
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm('Biztosan törölni szeretnéd ezt a felhasználót?')) {
-      return;
-    }
-
-    try {
-      await axios.delete(`${API_URL}/users/${userId}`, {
-        headers: getAuthHeaders()
-      });
-      fetchData();
-    } catch (error) {
-      alert(error.response?.data?.message || 'Hiba történt a törlés során');
+  const handleDelete = async (id) => {
+    if (window.confirm('Biztosan törölni szeretnéd ezt a felhasználót?')) {
+      try {
+        await axios.delete(`${API_URL}/users/${id}`, { 
+          headers: getAuthHeaders() 
+        });
+        fetchData();
+      } catch (error) {
+        alert('Hiba történt a törlés során!');
+      }
     }
   };
 
   const roleLabels = {
-    super_admin: 'Super Admin',
-    lab_staff: 'Labor munkatárs',
-    company_admin: 'Cég Admin',
-    company_user: 'Cég dolgozó'
+    'super_admin': 'Egyetemi adminisztrátor',
+    'labor_staff': 'Labor munkatárs',
+    'company_admin': 'Cég adminisztrátor',
+    'company_user': 'Cég felhasználó'
   };
 
-  const roleColors = {
-    super_admin: 'bg-purple-100 text-purple-800',
-    lab_staff: 'bg-blue-100 text-blue-800',
-    company_admin: 'bg-green-100 text-green-800',
-    company_user: 'bg-gray-100 text-gray-800'
-  };
-
-  const filteredUsers = users.filter(u =>
+  const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.company_name && u.company_name.toLowerCase().includes(searchTerm.toLowerCase()))
+    roleLabels[u.role]?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-lg text-gray-600">Betöltés...</div>
+        <div className="text-gray-600">Betöltés...</div>
       </div>
     );
   }
@@ -164,35 +154,42 @@ function UserManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Felhasználók</h1>
-          <p className="text-gray-600 mt-1">
-            Összesen {filteredUsers.length} felhasználó
-          </p>
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-3">
+          <UsersIcon className="h-8 w-8 text-indigo-600" />
+          <h1 className="text-3xl font-bold text-gray-900">Felhasználók kezelése</h1>
         </div>
-
         <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          onClick={() => {
+            setEditingId(null);
+            setFormData({
+              email: '',
+              password: '',
+              name: '',
+              role: 'company_user',
+              company_id: '',
+              department_id: '',  // v7.0.1
+              phone: ''
+            });
+            setShowModal(true);
+          }}
+          className="flex items-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
         >
-          <UserPlus className="w-5 h-5 mr-2" />
-          Új felhasználó
+          <UserPlus className="h-5 w-5" />
+          <span>Új felhasználó</span>
         </button>
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-          <input
-            type="text"
-            placeholder="Keresés név, email vagy cég szerint..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          />
-        </div>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+        <input
+          type="text"
+          placeholder="Keresés név, email vagy szerepkör szerint..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        />
       </div>
 
       {/* Users Table */}
@@ -201,13 +198,16 @@ function UserManagement() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Felhasználó
+                Név
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Email
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Szerepkör
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Cég
+                Cég / Szervezeti egység
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Telefon
@@ -218,168 +218,186 @@ function UserManagement() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredUsers.length === 0 ? (
-              <tr>
-                <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
-                  <UsersIcon className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p>Nincs megjeleníthető felhasználó</p>
-                </td>
-              </tr>
-            ) : (
-              filteredUsers.map((u) => {
-                console.log('🔍 Rendering user:', u.id, u.name, 'Current user:', user?.id);
-                return (
+            {filteredUsers.map((u) => {
+              const company = companies.find(c => c.id === u.company_id);
+              const department = departments.find(d => d.id === u.department_id);  // v7.0.1
+              
+              return (
                 <tr key={u.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{u.name}</div>
-                    <div className="text-sm text-gray-500">{u.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${roleColors[u.role]}`}>
+                    <div className="text-sm text-gray-600">{u.email}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      u.role === 'super_admin' ? 'bg-purple-100 text-purple-800' :
+                      u.role === 'labor_staff' ? 'bg-blue-100 text-blue-800' :
+                      u.role === 'company_admin' ? 'bg-green-100 text-green-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
                       {roleLabels[u.role]}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {u.company_name || '-'}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-900">
+                      {/* v7.0.1: Show department for labor_staff, company for others */}
+                      {u.role === 'labor_staff' ? (
+                        department ? (
+                          <span className="text-blue-600">🏢 {department.name}</span>
+                        ) : (
+                          <span className="text-red-600">⚠️ Nincs megadva</span>
+                        )
+                      ) : (
+                        company?.name || '-'
+                      )}
+                    </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {u.phone || '-'}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-600">{u.phone || '-'}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
-                    {u.id !== user?.id ? (
-                      <>
-                        <button
-                          onClick={() => handleEdit(u)}
-                          className="text-indigo-600 hover:text-indigo-900"
-                          title="Szerkesztés"
-                        >
-                          <Edit2 className="w-5 h-5 inline" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteUser(u.id)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Törlés"
-                        >
-                          <Trash2 className="w-5 h-5 inline" />
-                        </button>
-                      </>
-                    ) : (
-                      <span className="text-gray-400 text-xs">Saját fiók</span>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <button
+                      onClick={() => handleEdit(u)}
+                      className="text-indigo-600 hover:text-indigo-900 mr-4"
+                    >
+                      <Edit2 className="h-5 w-5" />
+                    </button>
+                    {u.id !== user.id && (
+                      <button
+                        onClick={() => handleDelete(u.id)}
+                        className="text-red-600 hover:text-red-900"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
                     )}
                   </td>
                 </tr>
-              )})
-            )}
+              );
+            })}
           </tbody>
         </table>
       </div>
 
-      {/* Create/Edit User Modal */}
+      {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {editingId ? 'Felhasználó szerkesztése' : 'Új felhasználó létrehozása'}
-              </h2>
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">
+                {editingId ? 'Felhasználó szerkesztése' : 'Új felhasználó'}
+              </h3>
               <button
                 onClick={() => {
                   setShowModal(false);
-                  setEditingId(null);
                   setError('');
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <X className="w-6 h-6" />
+                <X className="h-6 w-6" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {error && (
-                <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg">
-                  <AlertCircle className="w-5 h-5" />
-                  <span className="text-sm">{error}</span>
+            {error && (
+              <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
+                <div className="flex">
+                  <AlertCircle className="h-5 w-5 text-red-400" />
+                  <p className="ml-3 text-sm text-red-700">{error}</p>
                 </div>
-              )}
+              </div>
+            )}
 
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Név *
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Név</label>
                 <input
                   type="text"
+                  required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email *
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
                 <input
                   type="email"
+                  required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Jelszó {editingId ? '(hagyd üresen, ha nem akarod módosítani)' : '*'}
+                <label className="block text-sm font-medium text-gray-700">
+                  Jelszó {editingId && '(üresen hagyva nem változik)'}
                 </label>
                 <input
                   type="password"
+                  required={!editingId}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required={!editingId}
-                  minLength="6"
-                  placeholder={editingId ? 'Hagyd üresen a megtartásához' : ''}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Szerepkör *
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Szerepkör</label>
                 <select
+                  required
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  required
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 >
-                  {user?.role === 'super_admin' && (
-                    <>
-                      <option value="super_admin">Super Admin</option>
-                      <option value="lab_staff">Labor munkatárs</option>
-                    </>
-                  )}
-                  <option value="company_admin">Cég Admin</option>
-                  <option value="company_user">Cég dolgozó</option>
+                  <option value="company_user">Cég felhasználó</option>
+                  <option value="company_admin">Cég adminisztrátor</option>
+                  <option value="labor_staff">Labor munkatárs</option>
+                  <option value="super_admin">Egyetemi adminisztrátor</option>
                 </select>
               </div>
 
-              {(formData.role === 'company_admin' || formData.role === 'company_user') && (
+              {/* v7.0.1: Department select for labor_staff */}
+              {formData.role === 'labor_staff' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cég *
+                  <label className="block text-sm font-medium text-gray-700">
+                    Szervezeti egység <span className="text-red-500">*</span>
                   </label>
                   <select
+                    required
+                    value={formData.department_id}
+                    onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="">-- Válassz szervezeti egységet --</option>
+                    {departments.map(dept => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Labor munkatársaknál kötelező megadni a szervezeti egységet
+                  </p>
+                </div>
+              )}
+
+              {/* Company select for company roles */}
+              {(formData.role === 'company_admin' || formData.role === 'company_user') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Cég</label>
+                  <select
+                    required
                     value={formData.company_id}
                     onChange={(e) => setFormData({ ...formData, company_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    required
-                    disabled={user?.role === 'company_admin'}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                   >
-                    <option value="">Válassz...</option>
-                    {companies.map((company) => (
-                      <option key={company.id} value={company.id}>
-                        {company.name}
+                    <option value="">-- Válassz céget --</option>
+                    {companies.map(comp => (
+                      <option key={comp.id} value={comp.id}>
+                        {comp.name}
                       </option>
                     ))}
                   </select>
@@ -387,34 +405,31 @@ function UserManagement() {
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Telefon
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Telefon</label>
                 <input
-                  type="tel"
+                  type="text"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                  {editingId ? 'Mentés' : 'Létrehozás'}
-                </button>
+              <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false);
-                    setEditingId(null);
                     setError('');
                   }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                 >
                   Mégse
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+                >
+                  {editingId ? 'Mentés' : 'Létrehozás'}
                 </button>
               </div>
             </form>

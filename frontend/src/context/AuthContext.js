@@ -30,8 +30,10 @@ export const AuthProvider = ({ children }) => {
           headers: { Authorization: `Bearer ${token}` }
         });
         setUser(response.data);
+        localStorage.setItem('user', JSON.stringify(response.data));  // v7.0.1: Sync localStorage
       } catch (error) {
         localStorage.removeItem('token');
+        localStorage.removeItem('user');  // v7.0.1: Remove user on auth failure
       }
     }
     setLoading(false);
@@ -42,6 +44,7 @@ export const AuthProvider = ({ children }) => {
       const response = await axios.post(`${API_URL}/auth/login`, { email, password });
       const { token, user } = response.data;
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(user));  // v7.0.1: Save user to localStorage
       setUser(user);
       return { success: true };
     } catch (error) {
@@ -54,6 +57,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');  // v7.0.1: Remove user from localStorage
     setUser(null);
   };
 
