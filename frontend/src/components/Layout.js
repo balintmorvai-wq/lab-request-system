@@ -28,7 +28,7 @@ function Layout() {
 
   const roleNames = {
     super_admin: 'Super Admin',
-    lab_staff: 'Labor munkatárs',
+    labor_staff: 'Labor munkatárs',  // v7.0.1: lab_staff → labor_staff for consistency
     company_admin: 'Cég Admin',
     company_user: 'Cég dolgozó'
   };

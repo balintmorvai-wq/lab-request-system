@@ -1058,7 +1058,7 @@ def update_request(current_user, request_id):
                 )
         
         # v6.1: Notifications for all university admin status changes
-        if data['status'] != old_status and current_user.role in ['super_admin', 'lab_staff']:
+        if data['status'] != old_status and current_user.role in ['super_admin', 'labor_staff']:  # v7.0.1: lab_staff → labor_staff
             # Notify company admins
             company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
             for admin in company_admins:
@@ -1662,12 +1662,18 @@ def create_user(current_user):
     if company_id == '' or company_id == 'null':
         company_id = None
     
+    # v7.0.1: Handle department_id
+    department_id = data.get('department_id')
+    if department_id == '' or department_id == 'null':
+        department_id = None
+    
     new_user = User(
         email=data.get('email'),
         password=generate_password_hash(data.get('password')),
         name=data.get('name'),
         role=data.get('role'),
         company_id=company_id,
+        department_id=department_id,  # v7.0.1: Add department_id
         phone=data.get('phone') if data.get('phone') else None
     )
     
@@ -1719,9 +1725,9 @@ def update_user(current_user, user_id):
     if 'password' in data and data['password']:  # Only if password provided
         user.password = generate_password_hash(data['password'])
     if 'role' in data:
-        # Company admin cannot change role to super_admin or lab_staff
+        # Company admin cannot change role to super_admin or labor_staff  # v7.0.1: lab_staff → labor_staff
         if current_user.role == 'company_admin':
-            if data['role'] in ['super_admin', 'lab_staff']:
+            if data['role'] in ['super_admin', 'labor_staff']:  # v7.0.1: lab_staff → labor_staff
                 return jsonify({'message': 'Nincs jogosultságod ezt a szerepkört beállítani!'}), 403
         user.role = data['role']
     if 'company_id' in data:
@@ -1731,6 +1737,11 @@ def update_user(current_user, user_id):
         # Empty string to None
         user.company_id = data['company_id'] if data['company_id'] != '' else None
     
+    # v7.0.1: Handle department_id
+    if 'department_id' in data:
+        # Empty string to None
+        user.department_id = data['department_id'] if data['department_id'] != '' else None
+    
     db.session.commit()
     
     return jsonify({'message': 'Felhasználó sikeresen frissítve!'})
@@ -1739,7 +1750,7 @@ def update_user(current_user, user_id):
 @app.route('/api/stats', methods=['GET'])
 @token_required
 def get_stats(current_user):
-    if current_user.role == 'super_admin' or current_user.role == 'lab_staff':
+    if current_user.role == 'super_admin' or current_user.role == 'labor_staff':  # v7.0.1: lab_staff → labor_staff
         total_requests = LabRequest.query.count()
         requests_by_status = db.session.query(
             LabRequest.status, db.func.count(LabRequest.id)
@@ -2345,7 +2356,7 @@ def init_db():
                     email='labor@pannon.hu',
                     password=generate_password_hash('labor123'),
                     name='Kiss Éva',
-                    role='lab_staff',
+                    role='labor_staff',  # v7.0.1: Renamed lab_staff → labor_staff for consistency
                     phone='+36 30 234 5678'
                 ),
                 User(
