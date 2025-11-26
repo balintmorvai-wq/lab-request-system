@@ -16,7 +16,8 @@ import {
   Edit,
   Edit2,
   Send,
-  XCircle
+  XCircle,
+  Trash2
 } from 'lucide-react';
 
 function RequestList() {
@@ -155,6 +156,27 @@ function RequestList() {
       return;
     }
     await updateStatus(requestId, 'draft');
+  };
+
+  // v6.8 - Törlés funkció
+  const deleteRequest = async (requestId) => {
+    const request = requests.find(r => r.id === requestId);
+    if (!window.confirm(`Biztosan törölni szeretnéd ezt a laborkérést?\n\nAzonosító: ${request?.request_number || request?.sample_id}\n\nEz a művelet nem vonható vissza!`)) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_URL}/requests/${requestId}`, {
+        headers: getAuthHeaders()
+      });
+      
+      // Lista frissítése
+      fetchRequests();
+      alert('Laborkérés sikeresen törölve!');
+    } catch (error) {
+      console.error('Törlési hiba:', error);
+      alert(error.response?.data?.message || 'Hiba történt a törlés során');
+    }
   };
 
   const statusConfig = {
@@ -392,6 +414,17 @@ function RequestList() {
                             <XCircle className="w-5 h-5" />
                           </button>
                         </>
+                      )}
+
+                      {/* v6.8 - Törlés gomb (saját piszkozat vagy super admin) */}
+                      {((request.status === 'draft' && request.user_id === user.id) || user.role === 'super_admin') && (
+                        <button
+                          onClick={() => deleteRequest(request.id)}
+                          className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                          title="Törlés"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       )}
 
                       {/* Status Update (Lab/Super Admin) */}

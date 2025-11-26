@@ -11,7 +11,8 @@ import {
   TrendingUp,
   DollarSign,
   Edit,
-  XCircle
+  XCircle,
+  Eye
 } from 'lucide-react';
 
 function Dashboard() {
@@ -231,33 +232,54 @@ function Dashboard() {
             </div>
           ) : (
             recentRequests.map((request) => (
-              <div key={request.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-gray-900">
-                        {request.sample_id}
-                      </h3>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[request.status]}`}>
-                        {statusLabels[request.status]}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {request.sample_description}
-                    </p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                      <span>Vizsgálatok: {request.test_types?.length || 0} db</span>
-                      {showCosts && (
-                        <>
-                          <span>•</span>
-                          <span className="font-semibold text-indigo-600">
-                            {(request.total_price || 0).toLocaleString('hu-HU')} Ft
-                          </span>
-                        </>
-                      )}
-                      <span>•</span>
-                      <span>{new Date(request.created_at).toLocaleDateString('hu-HU')}</span>
-                    </div>
+              <div key={request.id} className="px-6 py-3 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between gap-4">
+                  {/* Azonosító és státusz */}
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <h3 className="font-semibold text-gray-900 text-sm truncate">
+                      {request.request_number || request.sample_id}
+                    </h3>
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${statusColors[request.status]}`}>
+                      {statusLabels[request.status]}
+                    </span>
+                  </div>
+
+                  {/* Adatok */}
+                  <div className="hidden md:flex items-center gap-4 text-xs text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5" />
+                      {request.test_types?.length || 0} vizsgálat
+                    </span>
+                    {showCosts && (
+                      <>
+                        <span>•</span>
+                        <span className="font-semibold text-indigo-600">
+                          {(request.total_price || 0).toLocaleString('hu-HU')} Ft
+                        </span>
+                      </>
+                    )}
+                    <span>•</span>
+                    <span>{new Date(request.created_at).toLocaleDateString('hu-HU')}</span>
+                  </div>
+
+                  {/* Műveletek */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => navigate(`/requests/${request.id}`)}
+                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                      title="Megtekintés"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    {(user.role !== 'labor_staff' && request.status === 'draft') && (
+                      <button
+                        onClick={() => navigate(`/requests/edit/${request.id}`)}
+                        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                        title="Szerkesztés"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

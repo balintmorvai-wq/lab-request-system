@@ -1091,6 +1091,45 @@ def update_request(current_user, request_id):
     
     return jsonify({'message': 'Laborkérés sikeresen frissítve!'})
 
+# v6.8 - DELETE endpoint laborkérésekhez
+@app.route('/api/requests/<int:request_id>', methods=['DELETE'])
+@token_required
+def delete_request(current_user, request_id):
+    req = LabRequest.query.get_or_404(request_id)
+    
+    # Jogosultság ellenőrzése
+    # Super admin mindent törölhet
+    # Company admin és company user csak saját draft státuszú kéréseket törölhetnek
+    if current_user.role == 'super_admin':
+        # Admin mindent törölhet
+        pass
+    elif current_user.role in ['company_admin', 'company_user']:
+        # Csak saját piszkozatot törölhet
+        if req.user_id != current_user.id:
+            return jsonify({'message': 'Nincs jogosultságod ehhez a művelethez!'}), 403
+        if req.status != 'draft':
+            return jsonify({'message': 'Csak piszkozat státuszú kérést törölhetsz!'}), 403
+    else:
+        return jsonify({'message': 'Nincs jogosultságod kérések törléséhez!'}), 403
+    
+    # Melléklet törlése, ha van
+    if req.attachment_filename:
+        filepath = os.path.join(app.config['ATTACHMENT_FOLDER'], req.attachment_filename)
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                print(f"Melléklet törlési hiba: {e}")
+    
+    # Kapcsolódó adatok törlése (notifications)
+    Notification.query.filter_by(request_id=request_id).delete()
+    
+    # Kérés törlése
+    db.session.delete(req)
+    db.session.commit()
+    
+    return jsonify({'message': 'Laborkérés sikeresen törölve!'})
+
 @app.route('/api/requests/<int:request_id>/attachment', methods=['GET'])
 @token_required
 def download_attachment(current_user, request_id):

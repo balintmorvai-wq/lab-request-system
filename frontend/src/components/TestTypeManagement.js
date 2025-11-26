@@ -10,7 +10,9 @@ import {
   TestTube,
   Clock,
   Beaker,
-  FileText
+  FileText,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 function TestTypeManagement() {
@@ -23,7 +25,7 @@ function TestTypeManagement() {
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
   
-  // v6.7 - Kibővített formData az összes mezővel
+  // v6.8 - Kibővített formData az összes mezővel
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -91,17 +93,33 @@ function TestTypeManagement() {
     e.preventDefault();
     setError('');
 
+    // v6.8 - Biztosítjuk, hogy minden mező el legyen küldve
+    const dataToSend = {
+      ...formData,
+      // Biztosítjuk, hogy numerikus mezők számként kerüljenek elküldésre
+      price: formData.price ? parseFloat(formData.price) : null,
+      cost_price: formData.cost_price ? parseFloat(formData.cost_price) : null,
+      turnaround_days: formData.turnaround_days ? parseInt(formData.turnaround_days) : null,
+      turnaround_time: formData.turnaround_time ? parseFloat(formData.turnaround_time) : null,
+      measurement_time: formData.measurement_time ? parseFloat(formData.measurement_time) : null,
+      sample_prep_time: formData.sample_prep_time ? parseFloat(formData.sample_prep_time) : null,
+      evaluation_time: formData.evaluation_time ? parseFloat(formData.evaluation_time) : null,
+      sample_quantity: formData.sample_quantity ? parseFloat(formData.sample_quantity) : null,
+      department_id: formData.department_id || null,
+      category_id: formData.category_id || null
+    };
+
     try {
       if (editingId) {
         await axios.put(
           `${API_URL}/test-types/${editingId}`,
-          formData,
+          dataToSend,
           { headers: getAuthHeaders() }
         );
       } else {
         await axios.post(
           `${API_URL}/test-types`,
-          formData,
+          dataToSend,
           { headers: getAuthHeaders() }
         );
       }
@@ -159,7 +177,7 @@ function TestTypeManagement() {
     try {
       await axios.put(
         `${API_URL}/test-types/${testType.id}`,
-        { is_active: !testType.is_active },
+        { ...testType, is_active: !testType.is_active },
         { headers: getAuthHeaders() }
       );
       fetchData();
@@ -178,45 +196,44 @@ function TestTypeManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Vizsgálattípusok</h1>
-          <p className="text-gray-600 mt-1">
-            Összesen {testTypes.length} vizsgálattípus
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Vizsgálattípusok kezelése</h1>
+          <p className="text-sm text-gray-600 mt-1">Vizsgálatok, árak és paraméterek karbantartása</p>
         </div>
-
         <button
           onClick={() => {
             setEditingId(null);
             setFormData(resetFormData());
             setShowModal(true);
           }}
-          className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
         >
-          <Plus className="w-5 h-5 mr-2" />
-          Új vizsgálattípus
+          <Plus className="w-5 h-5" />
+          Új vizsgálat
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* v6.8 - Teljes táblázat oszlopokkal */}
+      <div className="bg-white shadow rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vizsgálat</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Név</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Leírás</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Szervezeti egység</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategória</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Átfutás</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ár</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Minta</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Státusz</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ár (Ft)</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Átfutási idő (nap)</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktív</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Műveletek</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {testTypes.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
                     <TestTube className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                     <p>Még nincsenek vizsgálattípusok</p>
                   </td>
@@ -224,21 +241,23 @@ function TestTypeManagement() {
               ) : (
                 testTypes.map((testType) => (
                   <tr key={testType.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-4">
-                      <div className="flex items-start">
-                        <TestTube className="w-5 h-5 text-gray-400 mr-2 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">{testType.name}</div>
-                          {testType.standard && (
-                            <div className="text-xs text-blue-600">{testType.standard}</div>
-                          )}
-                          {testType.description && (
-                            <div className="text-xs text-gray-500 max-w-xs truncate">{testType.description}</div>
-                          )}
-                        </div>
+                    <td className="px-4 py-3">
+                      <div className="text-sm font-medium text-gray-900">{testType.name}</div>
+                      {testType.standard && (
+                        <div className="text-xs text-blue-600">{testType.standard}</div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-gray-600 max-w-xs truncate">
+                        {testType.description || '-'}
                       </div>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-3">
+                      <div className="text-sm text-gray-900">
+                        {testType.department_name || '-'}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
                       {testType.category_name ? (
                         <span 
                           className="px-2 py-1 text-xs font-medium rounded-full"
@@ -253,36 +272,17 @@ function TestTypeManagement() {
                         <span className="text-gray-400 text-sm">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm">
-                        {testType.turnaround_time ? (
-                          <span className="font-medium">{testType.turnaround_time} óra</span>
-                        ) : testType.turnaround_days ? (
-                          <span className="font-medium">{testType.turnaround_days} nap</span>
-                        ) : (
-                          <span className="text-gray-400">-</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-3">
                       <div className="text-sm font-semibold text-gray-900">
-                        {testType.price ? `${testType.price.toLocaleString('hu-HU')} Ft` : '-'}
+                        {testType.price ? `${testType.price.toLocaleString('hu-HU')}` : '-'}
                       </div>
-                      {testType.cost_price > 0 && (
-                        <div className="text-xs text-gray-500">
-                          Önkölt: {testType.cost_price.toLocaleString('hu-HU')} Ft
-                        </div>
-                      )}
                     </td>
-                    <td className="px-4 py-4">
-                      <div className="text-sm text-gray-600">
-                        {testType.sample_quantity || '-'}
+                    <td className="px-4 py-3">
+                      <div className="text-sm">
+                        {testType.turnaround_days || '-'}
                       </div>
-                      {testType.sample_prep_required && (
-                        <div className="text-xs text-orange-600">Előkész. szüks.</div>
-                      )}
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="px-4 py-3">
                       <button
                         onClick={() => toggleActive(testType)}
                         className={`px-2 py-1 text-xs font-medium rounded-full ${
@@ -294,19 +294,23 @@ function TestTypeManagement() {
                         {testType.is_active ? 'Aktív' : 'Inaktív'}
                       </button>
                     </td>
-                    <td className="px-4 py-4 text-right space-x-2">
-                      <button
-                        onClick={() => handleEdit(testType)}
-                        className="text-indigo-600 hover:text-indigo-900"
-                      >
-                        <Edit2 className="w-5 h-5 inline" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(testType.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        <Trash2 className="w-5 h-5 inline" />
-                      </button>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleEdit(testType)}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Szerkesztés"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(testType.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Törlés"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -316,17 +320,19 @@ function TestTypeManagement() {
         </div>
       </div>
 
-      {/* Modal - v6.7 kibővített mezőkkel */}
+      {/* Modal - v6.8 javított űrlap */}
       {showModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white">
-              <h2 className="text-xl font-semibold text-gray-900">
-                {editingId ? 'Vizsgálattípus szerkesztése' : 'Új vizsgálattípus'}
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold text-gray-900">
+                {editingId ? 'Vizsgálat szerkesztése' : 'Új vizsgálat hozzáadása'}
               </h2>
               <button
                 onClick={() => {
                   setShowModal(false);
+                  setEditingId(null);
+                  setFormData(resetFormData());
                   setError('');
                 }}
                 className="text-gray-400 hover:text-gray-600"
@@ -335,74 +341,115 @@ function TestTypeManagement() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              {error && (
-                <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg">
-                  <AlertCircle className="w-5 h-5" />
-                  <span className="text-sm">{error}</span>
-                </div>
-              )}
+            {error && (
+              <div className="mx-6 mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
 
-              {/* Alapadatok */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Alapadatok
-                </h3>
-                
+            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+              {/* v6.8 - Alap információk - LÁTHATÓ A LABORKÉRŐ LAPON */}
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Eye className="w-5 h-5 text-blue-600" />
+                  <h3 className="font-semibold text-blue-900">Megjelenik a laborkérő lapon</h3>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Vizsgálat neve *
                     </label>
                     <input
                       type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       required
+                      value={formData.name}
+                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
 
-                  <div className="md:col-span-2">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Leírás (mérési szolgáltatás)
+                      Ár (Ft) *
                     </label>
-                    <textarea
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      rows="2"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      value={formData.price}
+                      onChange={(e) => setFormData({...formData, price: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
+                </div>
 
-                  <div className="md:col-span-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Leírás
+                  </label>
+                  <textarea
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    rows="2"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Kategória *
+                    </label>
+                    <select
+                      required
+                      value={formData.category_id}
+                      onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">Válassz kategóriát</option>
+                      {categories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Átfutási idő (nap)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.turnaround_days}
+                      onChange={(e) => setFormData({...formData, turnaround_days: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      placeholder="pl. 3"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* v6.8 - Belső információk - NEM LÁTHATÓ A LABORKÉRŐ LAPON */}
+              <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <EyeOff className="w-5 h-5 text-gray-600" />
+                  <h3 className="font-semibold text-gray-900">Belső adatok (nem látható a laborkérő lapon)</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Szabvány
                     </label>
                     <input
                       type="text"
                       value={formData.standard}
-                      onChange={(e) => setFormData({ ...formData, standard: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="pl. ASTM D86, MSZ EN ISO 3104"
+                      onChange={(e) => setFormData({...formData, standard: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      placeholder="pl. MSZ EN ISO 3104"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Szakmai kategória
-                    </label>
-                    <select
-                      value={formData.category_id}
-                      onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    >
-                      <option value="">-- Nincs megadva --</option>
-                      {categories.filter(c => c.is_active).map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
-                      ))}
-                    </select>
                   </div>
 
                   <div>
@@ -411,114 +458,72 @@ function TestTypeManagement() {
                     </label>
                     <select
                       value={formData.department_id}
-                      onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      onChange={(e) => setFormData({...formData, department_id: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     >
-                      <option value="">-- Nincs megadva --</option>
-                      {departments.filter(d => d.is_active).map(dept => (
+                      <option value="">Válassz egységet</option>
+                      {departments.map(dept => (
                         <option key={dept.id} value={dept.id}>{dept.name}</option>
                       ))}
                     </select>
                   </div>
+                </div>
 
-                  <div className="md:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Önköltség (Ft)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.cost_price}
+                      onChange={(e) => setFormData({...formData, cost_price: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Minta mennyiség (ml)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={formData.sample_quantity}
+                      onChange={(e) => setFormData({...formData, sample_quantity: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Veszélyesség
+                    </label>
+                    <select
+                      value={formData.hazard_level}
+                      onChange={(e) => setFormData({...formData, hazard_level: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">Nincs</option>
+                      <option value="low">Alacsony</option>
+                      <option value="medium">Közepes</option>
+                      <option value="high">Magas</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Készülék
                     </label>
                     <input
                       type="text"
                       value={formData.device}
-                      onChange={(e) => setFormData({ ...formData, device: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="pl. Anton Paar DMA 4500 M"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Árak */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
-                  💰 Árak
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Kiajánlási ár (Ft/minta) *
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      required
-                      min="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Önköltség (Ft/minta)
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.cost_price}
-                      onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      min="0"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Időadatok */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                  <Clock className="w-4 h-4" />
-                  Időadatok (órában)
-                </h3>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mérési idő
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.measurement_time}
-                      onChange={(e) => setFormData({ ...formData, measurement_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      min="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Előkészítési idő
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.sample_prep_time}
-                      onChange={(e) => setFormData({ ...formData, sample_prep_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      min="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Kiértékelés
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={formData.evaluation_time}
-                      onChange={(e) => setFormData({ ...formData, evaluation_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      min="0"
+                      onChange={(e) => setFormData({...formData, device: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
 
@@ -528,131 +533,118 @@ function TestTypeManagement() {
                     </label>
                     <input
                       type="number"
-                      step="0.1"
-                      value={formData.turnaround_time}
-                      onChange={(e) => setFormData({ ...formData, turnaround_time: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       min="0"
+                      step="0.5"
+                      value={formData.turnaround_time}
+                      onChange={(e) => setFormData({...formData, turnaround_time: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Átfutási idő (napokban)
-                  </label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mérési idő (óra)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={formData.measurement_time}
+                      onChange={(e) => setFormData({...formData, measurement_time: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mintaelőkészítés (óra)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={formData.sample_prep_time}
+                      onChange={(e) => setFormData({...formData, sample_prep_time: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Kiértékelés (óra)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={formData.evaluation_time}
+                      onChange={(e) => setFormData({...formData, evaluation_time: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
                   <input
-                    type="number"
-                    value={formData.turnaround_days}
-                    onChange={(e) => setFormData({ ...formData, turnaround_days: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                    min="1"
-                    max="365"
+                    type="checkbox"
+                    id="sample_prep_required"
+                    checked={formData.sample_prep_required}
+                    onChange={(e) => setFormData({...formData, sample_prep_required: e.target.checked})}
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Minta beérkezésétől számított munkanapok száma
-                  </p>
+                  <label htmlFor="sample_prep_required" className="text-sm text-gray-700">
+                    Mintaelőkészítés szükséges
+                  </label>
                 </div>
-              </div>
 
-              {/* Minta adatok */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-                  <Beaker className="w-4 h-4" />
-                  Minta adatok
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {formData.sample_prep_required && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Minta mennyiség
+                      Mintaelőkészítés leírása
                     </label>
-                    <input
-                      type="text"
-                      value={formData.sample_quantity}
-                      onChange={(e) => setFormData({ ...formData, sample_quantity: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="pl. 50-100 mg, 1-4 g"
+                    <textarea
+                      value={formData.sample_prep_description}
+                      onChange={(e) => setFormData({...formData, sample_prep_description: e.target.value})}
+                      rows="2"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Veszélyesség
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.hazard_level}
-                      onChange={(e) => setFormData({ ...formData, hazard_level: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="pl. Nem veszélyes, Gyúlékony"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg">
-                      <input
-                        type="checkbox"
-                        id="sample_prep_required"
-                        checked={formData.sample_prep_required}
-                        onChange={(e) => setFormData({ ...formData, sample_prep_required: e.target.checked })}
-                        className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
-                      />
-                      <label htmlFor="sample_prep_required" className="text-sm font-medium text-gray-700">
-                        Mintaelőkészítés szükséges
-                      </label>
-                    </div>
-                  </div>
-
-                  {formData.sample_prep_required && (
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Mintaelőkészítés típusa
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.sample_prep_description}
-                        onChange={(e) => setFormData({ ...formData, sample_prep_description: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        placeholder="pl. Szárítás, mosás, Savas feltárás"
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Státusz */}
-              {editingId && (
-                <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     id="is_active"
                     checked={formData.is_active}
-                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                    onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+                    className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                   />
-                  <label htmlFor="is_active" className="text-sm font-medium text-gray-700">
-                    Aktív státusz (csak aktív vizsgálatok jelennek meg a kérőlapon)
+                  <label htmlFor="is_active" className="text-sm text-gray-700">
+                    Aktív vizsgálat (elérhető kérésekhez)
                   </label>
                 </div>
-              )}
+              </div>
 
-              <div className="flex gap-3 pt-4 border-t">
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                  {editingId ? 'Mentés' : 'Létrehozás'}
-                </button>
+              <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
                   type="button"
                   onClick={() => {
                     setShowModal(false);
+                    setEditingId(null);
+                    setFormData(resetFormData());
                     setError('');
                   }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   Mégse
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  {editingId ? 'Mentés' : 'Létrehozás'}
                 </button>
               </div>
             </form>

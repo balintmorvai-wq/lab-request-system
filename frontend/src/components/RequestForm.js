@@ -81,15 +81,19 @@ function RequestForm() {
     fetchCategories();
     if (isEditing) {
       loadRequest();
-    } else {
-      // Új kérés: alapértelmezett értékek
+    }
+  }, [id]);
+
+  // Külön effect a user adatok automatikus kitöltéséhez
+  useEffect(() => {
+    if (!isEditing && user) {
       setFormData(prev => ({ 
         ...prev, 
         contact_person: user.name || '',
         contact_phone: user.phone || ''
       }));
     }
-  }, [id]);
+  }, [user, isEditing]);
 
   const fetchCategories = async () => {
     try {
