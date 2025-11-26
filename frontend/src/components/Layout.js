@@ -48,7 +48,8 @@ function Layout() {
           <div className="space-y-1 pl-2">
             {[
               { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-              { name: 'Laborkérések', href: '/requests', icon: FileText }
+              { name: 'Laborkérések', href: '/requests', icon: FileText },
+              { name: 'Munkalistám', href: '/worklist', icon: Clipboard }  // v7.0.2: Super admin worklist
             ].map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.href;
