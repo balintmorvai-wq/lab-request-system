@@ -181,6 +181,19 @@ MIGRATIONS = [
     },
     
     # ============================================================================
+    # v7.0 MIGRATIONS - Kiértékelő modul
+    # ============================================================================
+    {
+        'table': 'user',
+        'column': 'department_id',
+        'definition': 'INTEGER REFERENCES department(id)',
+        'description': 'Szervezeti egység (labor staff-nál kötelező)'
+    },
+    
+    # NOTE: test_result table creation is handled in auto_migrate_inline()
+    # because it requires CREATE TABLE, not just ALTER TABLE ADD COLUMN
+    
+    # ============================================================================
     # FUTURE MIGRATIONS - Add below this line
     # ============================================================================
 ]

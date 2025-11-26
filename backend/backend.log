@@ -1,0 +1,62 @@
+
+🎉 Adatbázis inicializálva!
+
+🔄 Checking for database migrations...
+  📋 Running schema migrations...
+  ⏭️  Skipped: lab_request.sampling_address (already exists)
+  ⏭️  Skipped: lab_request.contact_person (already exists)
+  ⏭️  Skipped: lab_request.contact_phone (already exists)
+  ⏭️  Skipped: department.sample_pickup_address (already exists)
+  ⏭️  Skipped: department.sample_pickup_contact (already exists)
+  ⏭️  Skipped: test_type.standard (already exists)
+  ⏭️  Skipped: test_type.device (already exists)
+  ⏭️  Skipped: test_type.cost_price (already exists)
+  ⏭️  Skipped: test_type.measurement_time (already exists)
+  ⏭️  Skipped: test_type.sample_prep_time (already exists)
+  ⏭️  Skipped: test_type.evaluation_time (already exists)
+  ⏭️  Skipped: test_type.turnaround_time (already exists)
+  ⏭️  Skipped: test_type.sample_quantity (already exists)
+  ⏭️  Skipped: test_type.sample_prep_required (already exists)
+  ⏭️  Skipped: test_type.sample_prep_description (already exists)
+  ⏭️  Skipped: test_type.hazard_level (already exists)
+  ⏭️  Skipped: lab_request.request_number (already exists)
+  ⏭️  Skipped: lab_request.internal_id (already exists)
+  ⏭️  Skipped: lab_request.sampling_datetime (already exists)
+  ⏭️  Skipped: lab_request.logistics_type (already exists)
+  ⏭️  Skipped: lab_request.shipping_address (already exists)
+✅ Database schema is up to date (no migrations needed)
+  ⚠️  sample_quantity type check/conversion skipped: (sqlite3.OperationalError) no such table: information_schema.columns
+[SQL: 
+                    SELECT data_type FROM information_schema.columns 
+                    WHERE table_name = 'test_type' AND column_name = 'sample_quantity'
+                ]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+  ⚠️  standard type check/conversion skipped: (sqlite3.OperationalError) no such table: information_schema.columns
+[SQL: 
+                    SELECT data_type, character_maximum_length FROM information_schema.columns 
+                    WHERE table_name = 'test_type' AND column_name = 'standard'
+                ]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+🚀 Backend starting...
+📊 API endpoint: /api/stats
+
+🆕 v6.6 features:
+   📁 Categories
+   📎 File attachments (max 20 MB)
+   🏢 Company logo
+   🎨 Color-coded test types
+
+🆕 v6.6 ENHANCED v2:
+   📍 Sampling address & contact details
+   🏢 Department sample pickup info
+   📅 Optional deadline
+   🎯 Auto-scroll to validation errors
+
+ * Serving Flask app 'app'
+ * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://21.0.0.72:5000
+Press CTRL+C to quit

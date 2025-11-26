@@ -2410,76 +2410,78 @@ def auto_migrate():
     Automatic migration that runs on app startup
     Uses the migration framework from migrations.py
     """
-    try:
-        from sqlalchemy import inspect
-        from migrations import apply_migrations
-        
-        print("  📋 Running schema migrations...")
-        inspector = inspect(db.engine)
-        
-        # Apply all pending migrations from migrations.py
-        success, applied, errors = apply_migrations(db, inspector)
-        
-        if applied:
-            print(f"\n✅ Auto-migration completed! Applied {len(applied)} changes:")
-            for mig in applied:
-                print(f"   - {mig['table']}.{mig['column']}: {mig['description']}")
-        else:
-            print("✅ Database schema is up to date (no migrations needed)")
-        
-        if errors:
-            print(f"\n⚠️  {len(errors)} errors occurred:")
-            for error in errors:
-                print(f"   {error}")
-        
-        # v6.7: Fix sample_quantity column type (FLOAT -> VARCHAR)
+    with app.app_context():
         try:
-            # Check if sample_quantity is FLOAT type and convert to VARCHAR
-            result = db.session.execute(db.text("""
-                SELECT data_type FROM information_schema.columns 
-                WHERE table_name = 'test_type' AND column_name = 'sample_quantity'
-            """))
-            row = result.fetchone()
-            if row and row[0] in ('double precision', 'real', 'numeric', 'float'):
-                print("  🔄 Converting sample_quantity from FLOAT to VARCHAR...")
-                db.session.execute(db.text("ALTER TABLE test_type ALTER COLUMN sample_quantity TYPE VARCHAR(100)"))
-                db.session.commit()
-                print("  ✅ sample_quantity converted to VARCHAR")
+            from sqlalchemy import inspect
+            from migrations import apply_migrations
+            
+            print("  📋 Running schema migrations...")
+            inspector = inspect(db.engine)
+            
+            # Apply all pending migrations from migrations.py
+            success, applied, errors = apply_migrations(db, inspector)
+            
+            if applied:
+                print(f"\n✅ Auto-migration completed! Applied {len(applied)} changes:")
+                for mig in applied:
+                    print(f"   - {mig['table']}.{mig['column']}: {mig['description']}")
+            else:
+                print("✅ Database schema is up to date (no migrations needed)")
+            
+            if errors:
+                print(f"\n⚠️  {len(errors)} errors occurred:")
+                for error in errors:
+                    print(f"   {error}")
+            
+            # v6.7: Fix sample_quantity column type (FLOAT -> VARCHAR)
+            try:
+                # Check if sample_quantity is FLOAT type and convert to VARCHAR
+                result = db.session.execute(db.text("""
+                    SELECT data_type FROM information_schema.columns 
+                    WHERE table_name = 'test_type' AND column_name = 'sample_quantity'
+                """))
+                row = result.fetchone()
+                if row and row[0] in ('double precision', 'real', 'numeric', 'float'):
+                    print("  🔄 Converting sample_quantity from FLOAT to VARCHAR...")
+                    db.session.execute(db.text("ALTER TABLE test_type ALTER COLUMN sample_quantity TYPE VARCHAR(100)"))
+                    db.session.commit()
+                    print("  ✅ sample_quantity converted to VARCHAR")
+            except Exception as e:
+                print(f"  ⚠️  sample_quantity type check/conversion skipped: {e}")
+                db.session.rollback()
+            
+            # v6.7: Fix standard column type (VARCHAR -> TEXT)
+            try:
+                result = db.session.execute(db.text("""
+                    SELECT data_type, character_maximum_length FROM information_schema.columns 
+                    WHERE table_name = 'test_type' AND column_name = 'standard'
+                """))
+                row = result.fetchone()
+                if row and row[0] == 'character varying' and row[1] and row[1] < 500:
+                    print("  🔄 Converting standard from VARCHAR to TEXT...")
+                    db.session.execute(db.text("ALTER TABLE test_type ALTER COLUMN standard TYPE TEXT"))
+                    db.session.commit()
+                    print("  ✅ standard converted to TEXT")
+            except Exception as e:
+                print(f"  ⚠️  standard type check/conversion skipped: {e}")
+                db.session.rollback()
+            
+            return success
+            
+        except ImportError:
+            # Fallback to inline migrations if migrations.py not found
+            print("  ⚠️  migrations.py not found, using inline migrations")
+            return auto_migrate_inline()
         except Exception as e:
-            print(f"  ⚠️  sample_quantity type check/conversion skipped: {e}")
             db.session.rollback()
-        
-        # v6.7: Fix standard column type (VARCHAR -> TEXT)
-        try:
-            result = db.session.execute(db.text("""
-                SELECT data_type, character_maximum_length FROM information_schema.columns 
-                WHERE table_name = 'test_type' AND column_name = 'standard'
-            """))
-            row = result.fetchone()
-            if row and row[0] == 'character varying' and row[1] and row[1] < 500:
-                print("  🔄 Converting standard from VARCHAR to TEXT...")
-                db.session.execute(db.text("ALTER TABLE test_type ALTER COLUMN standard TYPE TEXT"))
-                db.session.commit()
-                print("  ✅ standard converted to TEXT")
-        except Exception as e:
-            print(f"  ⚠️  standard type check/conversion skipped: {e}")
-            db.session.rollback()
-        
-        return success
-        
-    except ImportError:
-        # Fallback to inline migrations if migrations.py not found
-        print("  ⚠️  migrations.py not found, using inline migrations")
-        return auto_migrate_inline()
-    except Exception as e:
-        db.session.rollback()
-        print(f"⚠️  Auto-migration failed: {e}")
-        print("   Application will continue, but some features may not work correctly.")
-        return False
+            print(f"⚠️  Auto-migration failed: {e}")
+            print("   Application will continue, but some features may not work correctly.")
+            return False
 
 def auto_migrate_inline():
     """
     Inline migration fallback (for backward compatibility)
+    Includes v7.0 migrations: user.department_id, test_result table
     """
     try:
         from sqlalchemy import inspect
@@ -2487,6 +2489,8 @@ def auto_migrate_inline():
         
         lab_request_columns = [col['name'] for col in inspector.get_columns('lab_request')]
         department_columns = [col['name'] for col in inspector.get_columns('department')]
+        user_columns = [col['name'] for col in inspector.get_columns('user')]  # v7.0
+        existing_tables = inspector.get_table_names()  # v7.0
         
         migrations_applied = []
         
@@ -2517,6 +2521,31 @@ def auto_migrate_inline():
             migrations_applied.append('department.sample_pickup_contact')
             print("  🔄 Added sample_pickup_contact to department")
         
+        # v7.0: User.department_id migration
+        if 'department_id' not in user_columns:
+            db.session.execute(db.text("ALTER TABLE \"user\" ADD COLUMN department_id INTEGER REFERENCES department(id)"))
+            migrations_applied.append('user.department_id')
+            print("  🔄 Added department_id to user (v7.0)")
+        
+        # v7.0: test_result table creation
+        if 'test_result' not in existing_tables:
+            db.session.execute(db.text("""
+                CREATE TABLE test_result (
+                    id SERIAL PRIMARY KEY,
+                    lab_request_id INTEGER NOT NULL REFERENCES lab_request(id) ON DELETE CASCADE,
+                    test_type_id INTEGER NOT NULL REFERENCES test_type(id),
+                    result_text TEXT,
+                    attachment_filename VARCHAR(200),
+                    status VARCHAR(50) DEFAULT 'pending',
+                    completed_by_user_id INTEGER REFERENCES "user"(id),
+                    completed_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            migrations_applied.append('test_result table')
+            print("  🔄 Created test_result table (v7.0)")
+        
         if migrations_applied:
             db.session.commit()
             print(f"✅ Applied {len(migrations_applied)} migrations")
@@ -2526,6 +2555,8 @@ def auto_migrate_inline():
     except Exception as e:
         db.session.rollback()
         print(f"⚠️  Inline migration failed: {e}")
+        import traceback
+        traceback.print_exc()  # v7.0: Better error debugging
         return False
 
 # Global flag to track initialization
