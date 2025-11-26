@@ -180,6 +180,9 @@ function Layout() {
           <div className="px-6 py-3 border-b border-gray-200">
             <div className="text-sm font-medium text-gray-900">{user?.name}</div>
             <div className="text-xs text-gray-500">{roleNames[user?.role]}</div>
+            {user?.role === 'labor_staff' && user?.department_name && (
+              <div className="text-xs text-indigo-600 mt-1">🏢 {user.department_name}</div>
+            )}
           </div>
 
           {user?.role === 'super_admin' ? renderSuperAdminMenu() : renderRegularMenu()}

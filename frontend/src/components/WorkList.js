@@ -226,6 +226,33 @@ function WorkList() {
                         )}
                         <span>{request.company_name}</span>
                       </div>
+
+                      {/* v7.0.1: Test list */}
+                      {request.test_list && request.test_list.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="text-xs font-medium text-gray-700 mb-2">Vizsgálatok:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {request.test_list.map((test) => (
+                              <div 
+                                key={test.id}
+                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs ${
+                                  test.status === 'completed' 
+                                    ? 'bg-green-50 text-green-700 border border-green-200' 
+                                    : test.status === 'in_progress'
+                                    ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+                                    : 'bg-gray-50 text-gray-600 border border-gray-200'
+                                }`}
+                              >
+                                <span className="font-medium">{test.name}</span>
+                                {test.department_name && user?.role === 'super_admin' && (
+                                  <span className="text-gray-500">({test.department_name})</span>
+                                )}
+                                {test.status === 'completed' && <CheckCircle className="w-3 h-3" />}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Közép -Progress */}

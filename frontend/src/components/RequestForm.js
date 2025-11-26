@@ -81,15 +81,21 @@ function RequestForm() {
     fetchCategories();
     if (isEditing) {
       loadRequest();
-    } else if (user) {
-      // Új kérés: kitöltjük az alapértékeket
-      setFormData(prev => ({ 
-        ...prev, 
-        contact_person: user.name || '',
-        contact_phone: user.phone || ''
+    }
+  }, [id, isEditing]);
+
+  // v7.0.1: Külön useEffect a user adatok alapértelmezett kitöltésére
+  useEffect(() => {
+    // Csak új kérés esetén (nem edit mode) és ha user elérhető
+    if (!isEditing && user && user.name && user.phone) {
+      // Csak akkor töltjük ki, ha még üresek a mezők
+      setFormData(prev => ({
+        ...prev,
+        contact_person: prev.contact_person || user.name,
+        contact_phone: prev.contact_phone || user.phone
       }));
     }
-  }, [id, user, isEditing]);
+  }, [user, isEditing]);
 
   const fetchCategories = async () => {
     try {

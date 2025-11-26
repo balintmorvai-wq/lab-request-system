@@ -345,7 +345,8 @@ def login():
             'name': user.name,
             'role': user.role,
             'company_id': user.company_id,
-            'department_id': user.department_id  # v7.0.1: Add department_id
+            'department_id': user.department_id,  # v7.0.1: Add department_id
+            'department_name': user.department.name if user.department else None  # v7.0.1: Add department_name
         }
     })
 
@@ -359,6 +360,7 @@ def get_current_user(current_user):
         'role': current_user.role,
         'company_id': current_user.company_id,
         'department_id': current_user.department_id,  # v7.0.1: Add department_id
+        'department_name': current_user.department.name if current_user.department else None,  # v7.0.1: Add department_name
         'phone': current_user.phone
     })
 
@@ -987,7 +989,7 @@ def create_request(current_user):
     db.session.commit()
     
     # v7.0: Automatikus TestResult rekordok létrehozása minden vizsgálathoz
-    test_type_ids = json.loads(test_types)
+    # v7.0.1: Fix - use test_type_ids already parsed above (line 911)
     for tt_id in test_type_ids:
         result = TestResult(
             lab_request_id=new_request.id,
@@ -1190,14 +1192,17 @@ def delete_request(current_user, request_id):
 @token_required
 def get_my_worklist(current_user):
     """
-    Labor munkatárs saját munkalistája
-    Csak azokat a kéréseket látja, amelyekben van olyan vizsgálat, 
-    ami az ő szervezeti egységéhez tartozik
+    Labor munkatárs saját munkalistája (+ super_admin minden vizsgálat)
+    Labor munkatárs: Csak azokat a kéréseket látja, amelyekben van olyan vizsgálat, 
+                     ami az ő szervezeti egységéhez tartozik
+    Super admin: Minden in_progress/validation_pending/completed kérést lát
     """
-    if current_user.role != 'labor_staff':
-        return jsonify({'message': 'Csak labor munkatársak számára elérhető!'}), 403
+    # v7.0.1: Super admin is allowed (sees everything)
+    if current_user.role not in ['labor_staff', 'super_admin']:
+        return jsonify({'message': 'Csak labor munkatársak és adminok számára elérhető!'}), 403
     
-    if not current_user.department_id:
+    # v7.0.1: Labor staff needs department
+    if current_user.role == 'labor_staff' and not current_user.department_id:
         return jsonify({'message': 'Nincs szervezeti egység hozzárendelve!'}), 400
     
     # Lekérjük az in_progress, validation_pending és completed kéréseket
@@ -1205,14 +1210,18 @@ def get_my_worklist(current_user):
         LabRequest.status.in_(['in_progress', 'validation_pending', 'completed'])
     ).all()
     
-    # Szűrjük azokra, amelyekben van saját dept vizsgálat
+    # Szűrjük azokra, amelyekben van saját dept vizsgálat (vagy super_admin esetén mindent)
     worklist = []
     for req in requests:
         test_type_ids = json.loads(req.test_types)
         test_types = TestType.query.filter(TestType.id.in_(test_type_ids)).all()
         
-        # Van-e saját szervezeti egységhez tartozó vizsgálat?
-        my_tests = [tt for tt in test_types if tt.department_id == current_user.department_id]
+        # v7.0.1: Super admin sees all tests
+        if current_user.role == 'super_admin':
+            my_tests = test_types  # All tests
+        else:
+            # Van-e saját szervezeti egységhez tartozó vizsgálat?
+            my_tests = [tt for tt in test_types if tt.department_id == current_user.department_id]
         
         if my_tests:
             # Lekérjük az eredményeket is
@@ -1222,6 +1231,17 @@ def get_my_worklist(current_user):
             # Számoljuk, hány saját vizsgálat van és hány elkészült
             my_test_count = len(my_tests)
             my_completed_count = sum(1 for tt in my_tests if results_dict.get(tt.id) and results_dict[tt.id].status == 'completed')
+            
+            # v7.0.1: Test list for display
+            test_list = [
+                {
+                    'id': tt.id,
+                    'name': tt.name,
+                    'department_name': tt.department.name if tt.department else None,
+                    'status': results_dict[tt.id].status if tt.id in results_dict else 'pending'
+                }
+                for tt in my_tests
+            ]
             
             worklist.append({
                 'id': req.id,
@@ -1235,7 +1255,8 @@ def get_my_worklist(current_user):
                 'company_name': req.company.name if req.company else None,
                 'my_test_count': my_test_count,
                 'my_completed_count': my_completed_count,
-                'progress': round((my_completed_count / my_test_count * 100) if my_test_count > 0 else 0)
+                'progress': round((my_completed_count / my_test_count * 100) if my_test_count > 0 else 0),
+                'test_list': test_list  # v7.0.1: Add test list
             })
     
     # Rendezés: sürgős elöl, határidő szerint
