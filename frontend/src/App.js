@@ -95,11 +95,11 @@ function AppRoutes() {
           } 
         />
         
-        {/* v7.0: Labor munkatárs munkalista */}
+        {/* v7.0: Labor munkatárs munkalista + v7.0.2: super_admin */}
         <Route 
           path="worklist" 
           element={
-            <PrivateRoute allowedRoles={['labor_staff']}>
+            <PrivateRoute allowedRoles={['labor_staff', 'super_admin']}>
               <WorkList />
             </PrivateRoute>
           } 

@@ -205,6 +205,11 @@ function RequestList() {
       color: 'bg-yellow-100 text-yellow-800',
       icon: Clock 
     },
+    validation_pending: {  // v7.0.2 FINAL: Add missing status
+      label: 'Validálásra vár',
+      color: 'bg-purple-100 text-purple-800',
+      icon: AlertCircle
+    },
     completed: { 
       label: 'Elkészült', 
       color: 'bg-green-100 text-green-800',
@@ -224,7 +229,7 @@ function RequestList() {
     critical: 'Kritikus'
   };
 
-  const canEditStatus = user?.role === 'super_admin' || user?.role === 'lab_staff';
+  const canEditStatus = user?.role === 'super_admin' || user?.role === 'labor_staff';  // v7.0.1: lab_staff → labor_staff
   const canApprove = user?.role === 'company_admin';
   const showCosts = user?.role !== 'company_user';
 
