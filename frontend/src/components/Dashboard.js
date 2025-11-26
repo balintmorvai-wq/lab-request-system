@@ -12,7 +12,9 @@ import {
   DollarSign,
   Edit,
   XCircle,
-  Eye
+  Eye,
+  Download,
+  Trash2
 } from 'lucide-react';
 
 function Dashboard() {
@@ -34,11 +36,58 @@ function Dashboard() {
       ]);
       
       setStats(statsRes.data);
-      setRecentRequests(requestsRes.data.slice(0, 5));
+      
+      // v6.8 - Időrend szerint rendezés (legújabb elöl)
+      const sortedRequests = requestsRes.data.sort((a, b) => {
+        return new Date(b.created_at) - new Date(a.created_at);
+      });
+      setRecentRequests(sortedRequests.slice(0, 5));
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // v6.8 - PDF letöltés funkció
+  const downloadPDF = async (requestId, sampleId) => {
+    try {
+      const response = await axios.get(`${API_URL}/requests/${requestId}/pdf`, {
+        headers: getAuthHeaders(),
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `laborkeres_${sampleId || requestId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('PDF letöltési hiba:', error);
+      alert('Hiba történt a PDF letöltése során');
+    }
+  };
+
+  // v6.8 - Törlés funkció
+  const deleteRequest = async (requestId) => {
+    const request = recentRequests.find(r => r.id === requestId);
+    if (!window.confirm(`Biztosan törölni szeretnéd ezt a laborkérést?\n\nAzonosító: ${request?.request_number || request?.sample_id}\n\nEz a művelet nem vonható vissza!`)) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_URL}/requests/${requestId}`, {
+        headers: getAuthHeaders()
+      });
+      
+      // Lista frissítése
+      fetchData();
+      alert('Laborkérés sikeresen törölve!');
+    } catch (error) {
+      console.error('Törlési hiba:', error);
+      alert(error.response?.data?.message || 'Hiba történt a törlés során');
     }
   };
 
@@ -264,6 +313,7 @@ function Dashboard() {
 
                   {/* Műveletek */}
                   <div className="flex items-center gap-2">
+                    {/* Megtekintés */}
                     <button
                       onClick={() => navigate(`/requests/${request.id}`)}
                       className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
@@ -271,13 +321,35 @@ function Dashboard() {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
+                    
+                    {/* PDF letöltés */}
+                    <button
+                      onClick={() => downloadPDF(request.id, request.request_number || request.sample_id)}
+                      className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                      title="PDF letöltés"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                    
+                    {/* Szerkesztés (csak draft és nem labor_staff) */}
                     {(user.role !== 'labor_staff' && request.status === 'draft') && (
                       <button
                         onClick={() => navigate(`/requests/edit/${request.id}`)}
-                        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         title="Szerkesztés"
                       >
                         <Edit className="w-4 h-4" />
+                      </button>
+                    )}
+                    
+                    {/* Törlés (saját draft vagy super admin) */}
+                    {((request.status === 'draft' && (request.user_id === user.id || user.role === 'company_admin')) || user.role === 'super_admin') && (
+                      <button
+                        onClick={() => deleteRequest(request.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Törlés"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
