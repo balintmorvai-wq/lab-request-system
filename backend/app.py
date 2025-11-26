@@ -46,11 +46,13 @@ else:
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['LOGO_FOLDER'] = 'uploads/logos'
 app.config['ATTACHMENT_FOLDER'] = 'uploads/attachments'
-app.config['MAX_CONTENT_LENGTH'] = 20 * 1024 * 1024  # 20MB max
+app.config['RESULT_ATTACHMENT_FOLDER'] = 'uploads/results'  # v7.0: Vizsgálati eredmény fájlok
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # v7.0: 50MB max (vizsgálati eredmények miatt)
 
 # Create upload folders
 os.makedirs(app.config['LOGO_FOLDER'], exist_ok=True)
 os.makedirs(app.config['ATTACHMENT_FOLDER'], exist_ok=True)
+os.makedirs(app.config['RESULT_ATTACHMENT_FOLDER'], exist_ok=True)  # v7.0
 
 # v6.6 Production: CORS with frontend domain
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
@@ -74,8 +76,12 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     role = db.Column(db.String(50), nullable=False)
     company_id = db.Column(db.Integer, db.ForeignKey('company.id'), nullable=True)
+    department_id = db.Column(db.Integer, db.ForeignKey('department.id'), nullable=True)  # v7.0: Szervezeti egység (labor staff-nál kötelező)
     phone = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    
+    # Kapcsolatok
+    department = db.relationship('Department', backref='users')  # v7.0
 
 class Company(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -206,6 +212,34 @@ class LabRequest(db.Model):
     approver = db.relationship('User', foreign_keys=[approved_by])
     category = db.relationship('RequestCategory', backref='lab_requests')
     company = db.relationship('Company', backref='lab_requests')
+
+# v7.0: Vizsgálati eredmények tábla
+class TestResult(db.Model):
+    """
+    Vizsgálati eredmények tárolása
+    Minden LabRequest + TestType párhoz tartozik egy eredmény rekord
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    lab_request_id = db.Column(db.Integer, db.ForeignKey('lab_request.id'), nullable=False)
+    test_type_id = db.Column(db.Integer, db.ForeignKey('test_type.id'), nullable=False)
+    
+    # Eredmény adatok
+    result_text = db.Column(db.Text)  # Szöveges eredmény
+    attachment_filename = db.Column(db.String(200))  # Csatolt fájl neve
+    
+    # Státusz és követés
+    status = db.Column(db.String(50), default='pending')  # 'pending', 'completed'
+    completed_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Ki töltötte ki
+    completed_at = db.Column(db.DateTime)  # Mikor töltötte ki
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    
+    # Kapcsolatok
+    lab_request = db.relationship('LabRequest', backref='test_results')
+    test_type = db.relationship('TestType', backref='test_results')
+    completed_by = db.relationship('User', backref='completed_test_results')
 
 class Notification(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -762,8 +796,13 @@ def get_test_type_details(test_type_ids):
 @app.route('/api/requests', methods=['GET'])
 @token_required
 def get_requests(current_user):
-    if current_user.role == 'super_admin' or current_user.role == 'lab_staff':
+    if current_user.role == 'super_admin':
         requests = LabRequest.query.all()
+    elif current_user.role == 'labor_staff':
+        # v7.0: Labor staff csak in_progress, validation_pending, completed státuszokat lát
+        requests = LabRequest.query.filter(
+            LabRequest.status.in_(['in_progress', 'validation_pending', 'completed'])
+        ).all()
     elif current_user.role == 'company_admin':
         requests = LabRequest.query.filter_by(company_id=current_user.company_id).all()
     else:
@@ -943,6 +982,17 @@ def create_request(current_user):
             )
     
     # Single commit for request and notifications
+    db.session.commit()
+    
+    # v7.0: Automatikus TestResult rekordok létrehozása minden vizsgálathoz
+    test_type_ids = json.loads(test_types)
+    for tt_id in test_type_ids:
+        result = TestResult(
+            lab_request_id=new_request.id,
+            test_type_id=tt_id,
+            status='pending'
+        )
+        db.session.add(result)
     db.session.commit()
     
     return jsonify({
@@ -1129,6 +1179,283 @@ def delete_request(current_user, request_id):
     db.session.commit()
     
     return jsonify({'message': 'Laborkérés sikeresen törölve!'})
+
+# ========================================
+# v7.0: TEST RESULTS & WORKLIST API
+# ========================================
+
+@app.route('/api/my-worklist', methods=['GET'])
+@token_required
+def get_my_worklist(current_user):
+    """
+    Labor munkatárs saját munkalistája
+    Csak azokat a kéréseket látja, amelyekben van olyan vizsgálat, 
+    ami az ő szervezeti egységéhez tartozik
+    """
+    if current_user.role != 'labor_staff':
+        return jsonify({'message': 'Csak labor munkatársak számára elérhető!'}), 403
+    
+    if not current_user.department_id:
+        return jsonify({'message': 'Nincs szervezeti egység hozzárendelve!'}), 400
+    
+    # Lekérjük az in_progress, validation_pending és completed kéréseket
+    requests = LabRequest.query.filter(
+        LabRequest.status.in_(['in_progress', 'validation_pending', 'completed'])
+    ).all()
+    
+    # Szűrjük azokra, amelyekben van saját dept vizsgálat
+    worklist = []
+    for req in requests:
+        test_type_ids = json.loads(req.test_types)
+        test_types = TestType.query.filter(TestType.id.in_(test_type_ids)).all()
+        
+        # Van-e saját szervezeti egységhez tartozó vizsgálat?
+        my_tests = [tt for tt in test_types if tt.department_id == current_user.department_id]
+        
+        if my_tests:
+            # Lekérjük az eredményeket is
+            results = TestResult.query.filter_by(lab_request_id=req.id).all()
+            results_dict = {r.test_type_id: r for r in results}
+            
+            # Számoljuk, hány saját vizsgálat van és hány elkészült
+            my_test_count = len(my_tests)
+            my_completed_count = sum(1 for tt in my_tests if results_dict.get(tt.id) and results_dict[tt.id].status == 'completed')
+            
+            worklist.append({
+                'id': req.id,
+                'request_number': req.request_number,
+                'internal_id': req.internal_id,
+                'sample_description': req.sample_description,
+                'status': req.status,
+                'urgency': req.urgency,
+                'deadline': req.deadline.isoformat() if req.deadline else None,
+                'created_at': req.created_at.isoformat(),
+                'company_name': req.company.name if req.company else None,
+                'my_test_count': my_test_count,
+                'my_completed_count': my_completed_count,
+                'progress': round((my_completed_count / my_test_count * 100) if my_test_count > 0 else 0)
+            })
+    
+    # Rendezés: sürgős elöl, határidő szerint
+    worklist.sort(key=lambda x: (
+        0 if x['urgency'] == 'critical' else 1 if x['urgency'] == 'urgent' else 2,
+        x['deadline'] if x['deadline'] else '9999-12-31'
+    ))
+    
+    return jsonify(worklist)
+
+@app.route('/api/requests/<int:request_id>/test-results', methods=['GET'])
+@token_required
+def get_test_results(current_user, request_id):
+    """
+    Egy laborkérés összes vizsgálati eredménye
+    """
+    req = LabRequest.query.get_or_404(request_id)
+    
+    # Jogosultság ellenőrzése
+    if current_user.role == 'company_user' and req.user_id != current_user.id:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    # Lekérjük a vizsgálatokat
+    test_type_ids = json.loads(req.test_types)
+    test_types = TestType.query.filter(TestType.id.in_(test_type_ids)).all()
+    
+    # Lekérjük az eredményeket
+    results = TestResult.query.filter_by(lab_request_id=request_id).all()
+    results_dict = {r.test_type_id: r for r in results}
+    
+    # Labor staff csak saját dept vizsgálatait látja
+    if current_user.role == 'labor_staff':
+        test_types = [tt for tt in test_types if tt.department_id == current_user.department_id]
+    
+    response_data = []
+    for tt in test_types:
+        result = results_dict.get(tt.id)
+        
+        response_data.append({
+            'test_type_id': tt.id,
+            'test_type_name': tt.name,
+            'test_type_description': tt.description,
+            'department_id': tt.department_id,
+            'department_name': tt.department.name if tt.department else None,
+            'result_id': result.id if result else None,
+            'result_text': result.result_text if result else None,
+            'attachment_filename': result.attachment_filename if result else None,
+            'status': result.status if result else 'pending',
+            'completed_by': result.completed_by.name if result and result.completed_by else None,
+            'completed_at': result.completed_at.isoformat() if result and result.completed_at else None,
+            'can_edit': current_user.role == 'super_admin' or (
+                current_user.role == 'labor_staff' and tt.department_id == current_user.department_id
+            )
+        })
+    
+    return jsonify(response_data)
+
+@app.route('/api/test-results', methods=['POST'])
+@token_required
+def create_or_update_test_result(current_user):
+    """
+    Vizsgálati eredmény mentése vagy frissítése
+    """
+    data = request.get_json()
+    
+    lab_request_id = data.get('lab_request_id')
+    test_type_id = data.get('test_type_id')
+    result_text = data.get('result_text', '')
+    
+    if not lab_request_id or not test_type_id:
+        return jsonify({'message': 'Hiányzó adatok!'}), 400
+    
+    # Ellenőrizzük a jogosultságot
+    test_type = TestType.query.get_or_404(test_type_id)
+    
+    if current_user.role == 'labor_staff':
+        if test_type.department_id != current_user.department_id:
+            return jsonify({'message': 'Nincs jogosultságod ehhez a vizsgálathoz!'}), 403
+    elif current_user.role not in ['super_admin']:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    # Keressük meg vagy hozzuk létre az eredményt
+    result = TestResult.query.filter_by(
+        lab_request_id=lab_request_id,
+        test_type_id=test_type_id
+    ).first()
+    
+    if result:
+        # Frissítés
+        result.result_text = result_text
+        result.status = data.get('status', 'completed')
+        result.completed_by_user_id = current_user.id
+        result.completed_at = datetime.datetime.utcnow()
+    else:
+        # Létrehozás
+        result = TestResult(
+            lab_request_id=lab_request_id,
+            test_type_id=test_type_id,
+            result_text=result_text,
+            status=data.get('status', 'completed'),
+            completed_by_user_id=current_user.id,
+            completed_at=datetime.datetime.utcnow()
+        )
+        db.session.add(result)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Eredmény mentve!',
+        'result_id': result.id
+    })
+
+@app.route('/api/test-results/<int:result_id>/attachment', methods=['POST'])
+@token_required
+def upload_result_attachment(current_user, result_id):
+    """
+    Fájl feltöltés vizsgálati eredményhez
+    Max 50MB
+    """
+    result = TestResult.query.get_or_404(result_id)
+    
+    # Jogosultság ellenőrzése
+    test_type = result.test_type
+    if current_user.role == 'labor_staff':
+        if test_type.department_id != current_user.department_id:
+            return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    elif current_user.role not in ['super_admin']:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    if 'file' not in request.files:
+        return jsonify({'message': 'Nincs fájl!'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'message': 'Üres fájlnév!'}), 400
+    
+    # Fájl mentése
+    filename = secure_filename(file.filename)
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    unique_filename = f"result_{result.id}_{timestamp}_{filename}"
+    filepath = os.path.join(app.config['RESULT_ATTACHMENT_FOLDER'], unique_filename)
+    
+    # Töröljük a régi fájlt, ha volt
+    if result.attachment_filename:
+        old_filepath = os.path.join(app.config['RESULT_ATTACHMENT_FOLDER'], result.attachment_filename)
+        if os.path.exists(old_filepath):
+            try:
+                os.remove(old_filepath)
+            except Exception as e:
+                print(f"Régi fájl törlési hiba: {e}")
+    
+    file.save(filepath)
+    result.attachment_filename = unique_filename
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Fájl feltöltve!',
+        'filename': unique_filename
+    })
+
+@app.route('/api/test-results/<int:result_id>/attachment', methods=['GET'])
+@token_required
+def download_result_attachment(current_user, result_id):
+    """
+    Vizsgálati eredmény fájl letöltése
+    """
+    result = TestResult.query.get_or_404(result_id)
+    
+    if not result.attachment_filename:
+        return jsonify({'message': 'Nincs melléklet!'}), 404
+    
+    filepath = os.path.join(app.config['RESULT_ATTACHMENT_FOLDER'], result.attachment_filename)
+    
+    if not os.path.exists(filepath):
+        return jsonify({'message': 'Fájl nem található!'}), 404
+    
+    return send_file(filepath, as_attachment=True, download_name=result.attachment_filename)
+
+@app.route('/api/requests/<int:request_id>/submit-validation', methods=['POST'])
+@token_required
+def submit_for_validation(current_user, request_id):
+    """
+    Laborkérés validálásra küldése
+    Labor staff: csak akkor, ha minden saját vizsgálat elkészült
+    """
+    req = LabRequest.query.get_or_404(request_id)
+    
+    if current_user.role not in ['labor_staff', 'super_admin']:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    # Labor staff esetén ellenőrizzük, hogy minden saját vizsgálat elkészült-e
+    if current_user.role == 'labor_staff':
+        test_type_ids = json.loads(req.test_types)
+        test_types = TestType.query.filter(TestType.id.in_(test_type_ids)).all()
+        my_tests = [tt for tt in test_types if tt.department_id == current_user.department_id]
+        
+        results = TestResult.query.filter_by(lab_request_id=request_id).all()
+        results_dict = {r.test_type_id: r for r in results}
+        
+        incomplete_tests = [tt for tt in my_tests if not results_dict.get(tt.id) or results_dict[tt.id].status != 'completed']
+        
+        if incomplete_tests:
+            return jsonify({
+                'message': 'Nem minden vizsgálat van kitöltve!',
+                'incomplete_tests': [tt.name for tt in incomplete_tests]
+            }), 400
+    
+    # Státusz frissítése
+    req.status = 'validation_pending'
+    db.session.commit()
+    
+    # Értesítés az adminoknak
+    admins = User.query.filter_by(role='super_admin').all()
+    for admin in admins:
+        create_notification(
+            admin.id,
+            req.id,
+            'validation_pending',
+            f'Új validálásra váró kérés: {req.request_number}'
+        )
+    
+    return jsonify({'message': 'Kérés validálásra küldve!'})
 
 @app.route('/api/requests/<int:request_id>/attachment', methods=['GET'])
 @token_required
@@ -1634,6 +1961,7 @@ def init_db():
         # Create departments
         if Department.query.count() == 0:
             departments = [
+                Department(name='Általános labor', description='Általános laboratóriumi munkák', contact_person='Adminisztrátor', contact_email='admin@pannon.hu'),  # v7.0: Default department
                 Department(name='Minta Előkészítő', description='Mintavétel, homogenizálás, előkészítés', contact_person='Szabó Katalin', contact_email='szabo@pannon.hu'),
                 Department(name='Kémiai Labor', description='Általános kémiai analitika', contact_person='Dr. Kovács István', contact_email='kovacs@pannon.hu'),
                 Department(name='Olajipar Szaklabor', description='Ásványolaj és származékok vizsgálata', contact_person='Dr. Nagy Éva', contact_email='nagy@pannon.hu'),
@@ -1643,6 +1971,16 @@ def init_db():
                 db.session.add(dept)
             db.session.commit()
             print("✅ Szervezeti egységek létrehozva!")
+        
+        # v7.0: Meglévő labor staff felhasználók department_id frissítése
+        default_dept = Department.query.filter_by(name='Általános labor').first()
+        if default_dept:
+            labor_staff_without_dept = User.query.filter_by(role='labor_staff', department_id=None).all()
+            for user in labor_staff_without_dept:
+                user.department_id = default_dept.id
+            if labor_staff_without_dept:
+                db.session.commit()
+                print(f"✅ {len(labor_staff_without_dept)} labor munkatárs hozzárendelve 'Általános labor' egységhez")
         
         # Create test types - v6.7 új kategóriákkal
         if TestType.query.count() == 0:
@@ -1660,7 +1998,7 @@ def init_db():
                     price=0, 
                     cost_price=0,
                     category_id=cat_minta, 
-                    department_id=1,
+                    department_id=4,  # v7.0: Minta Előkészítő
                     turnaround_days=0,
                     sample_prep_required=False
                 ),
@@ -1673,7 +2011,7 @@ def init_db():
                     price=12000, 
                     cost_price=8000,
                     category_id=cat_anyag, 
-                    department_id=2, 
+                    department_id=4,  # v7.0: Kémiai Labor
                     device='Oxford XRF',
                     turnaround_days=3,
                     measurement_time=1,
@@ -1690,7 +2028,7 @@ def init_db():
                     price=8000, 
                     cost_price=5000,
                     category_id=cat_anyag, 
-                    department_id=2, 
+                    department_id=4,  # v7.0: Kémiai Labor
                     device='Metrohm KF Titrator',
                     turnaround_days=2,
                     measurement_time=0.5,
@@ -1707,7 +2045,7 @@ def init_db():
                     price=15000, 
                     cost_price=10000,
                     category_id=cat_anyag, 
-                    department_id=3, 
+                    department_id=4,  # v7.0: Olajipar Szaklabor
                     turnaround_days=7,
                     measurement_time=4,
                     sample_prep_time=2,
@@ -1723,7 +2061,7 @@ def init_db():
                     price=13000, 
                     cost_price=8500,
                     category_id=cat_anyag, 
-                    department_id=2, 
+                    department_id=3,  # v7.0: Kémiai Labor
                     turnaround_days=4,
                     measurement_time=1.5,
                     sample_prep_time=0.5,
@@ -1739,7 +2077,7 @@ def init_db():
                     price=11000, 
                     cost_price=7000,
                     category_id=cat_anyag, 
-                    department_id=2, 
+                    department_id=4, 
                     turnaround_days=4,
                     measurement_time=1.5,
                     sample_prep_time=0.5,
@@ -1757,7 +2095,7 @@ def init_db():
                     price=14000, 
                     cost_price=9500,
                     category_id=cat_krom, 
-                    department_id=2, 
+                    department_id=4, 
                     device='Agilent 7890 GC-FID',
                     turnaround_days=5,
                     measurement_time=2,
@@ -1774,7 +2112,7 @@ def init_db():
                     price=14000, 
                     cost_price=9000,
                     category_id=cat_krom, 
-                    department_id=2, 
+                    department_id=4, 
                     device='Agilent 7890 GC-MS',
                     turnaround_days=5,
                     measurement_time=1.5,
@@ -1791,7 +2129,7 @@ def init_db():
                     price=16000, 
                     cost_price=11000,
                     category_id=cat_krom, 
-                    department_id=2, 
+                    department_id=4, 
                     device='Agilent 7890 GC-TCD',
                     turnaround_days=5,
                     measurement_time=1,
@@ -1845,7 +2183,7 @@ def init_db():
                     price=10000, 
                     cost_price=6000,
                     category_id=cat_fizikai, 
-                    department_id=3, 
+                    department_id=4, 
                     device='Anton Paar SVM 3001',
                     turnaround_days=2,
                     measurement_time=0.5,
@@ -1862,7 +2200,7 @@ def init_db():
                     price=10000, 
                     cost_price=6000,
                     category_id=cat_fizikai, 
-                    department_id=3, 
+                    department_id=4, 
                     device='Anton Paar SVM 3001',
                     turnaround_days=2,
                     measurement_time=0.5,
@@ -1879,7 +2217,7 @@ def init_db():
                     price=6000, 
                     cost_price=3500,
                     category_id=cat_fizikai, 
-                    department_id=3, 
+                    department_id=4, 
                     device='Anton Paar DMA 4500',
                     turnaround_days=1,
                     measurement_time=0.25,
@@ -1896,7 +2234,7 @@ def init_db():
                     price=7000, 
                     cost_price=4500,
                     category_id=cat_fizikai, 
-                    department_id=3, 
+                    department_id=4, 
                     device='Pensky-Martens készülék',
                     turnaround_days=2,
                     measurement_time=1,
@@ -1913,7 +2251,7 @@ def init_db():
                     price=9000, 
                     cost_price=6000,
                     category_id=cat_fizikai, 
-                    department_id=3, 
+                    department_id=4, 
                     turnaround_days=3,
                     measurement_time=2,
                     sample_prep_time=0.5,
@@ -1929,7 +2267,7 @@ def init_db():
                     price=11000, 
                     cost_price=7500,
                     category_id=cat_fizikai, 
-                    department_id=3, 
+                    department_id=4, 
                     device='ISL CFPP készülék',
                     turnaround_days=4,
                     measurement_time=1.5,
@@ -1946,7 +2284,7 @@ def init_db():
                     price=20000, 
                     cost_price=14000,
                     category_id=cat_fizikai, 
-                    department_id=3, 
+                    department_id=4, 
                     device='CFR cetán motor',
                     turnaround_days=5,
                     measurement_time=3,
@@ -1963,7 +2301,7 @@ def init_db():
                     price=18000, 
                     cost_price=12000,
                     category_id=cat_fizikai, 
-                    department_id=3, 
+                    department_id=4, 
                     device='CFR oktán motor',
                     turnaround_days=4,
                     measurement_time=2,

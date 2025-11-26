@@ -10,7 +10,8 @@ import {
   TestTube,
   Building2,
   Building,
-  Folder,  // v6.4
+  Folder,
+  Clipboard,  // v7.0
   LogOut, 
   Menu, 
   X,
@@ -110,20 +111,32 @@ function Layout() {
   );
 
   const renderRegularMenu = () => {
-    const navigation = [
-      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-      { name: 'Laborkérések', href: '/requests', icon: FileText },
-    ];
-
-    if (user?.role === 'company_admin') {
-      navigation.push({ name: 'Felhasználók', href: '/users', icon: Users });
+    let navigation = [];
+    
+    // v7.0: Labor staff számára külön navigáció
+    if (user?.role === 'labor_staff') {
+      navigation = [
+        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { name: 'Munkalistám', href: '/worklist', icon: Clipboard },  // v7.0: Új menüpont
+        { name: 'Minden kérés', href: '/requests', icon: FileText },
+      ];
+    } else {
+      navigation = [
+        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { name: 'Laborkérések', href: '/requests', icon: FileText },
+      ];
+      
+      if (user?.role === 'company_admin') {
+        navigation.push({ name: 'Felhasználók', href: '/users', icon: Users });
+      }
     }
 
     return (
       <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.href;
+          const isActive = location.pathname === item.href || 
+                          (item.href === '/worklist' && location.pathname.startsWith('/test-results'));
           
           return (
             <Link

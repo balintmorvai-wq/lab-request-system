@@ -8,7 +8,9 @@ import UserManagement from './components/UserManagement';
 import TestTypeManagement from './components/TestTypeManagement';
 import DepartmentManagement from './components/DepartmentManagement';
 import CompanyManagement from './components/CompanyManagement';
-import CategoryManagement from './components/CategoryManagement';  // v6.4
+import CategoryManagement from './components/CategoryManagement';
+import WorkList from './components/WorkList';  // v7.0
+import TestResultsPanel from './components/TestResultsPanel';  // v7.0
 import Layout from './components/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -89,6 +91,26 @@ function AppRoutes() {
           element={
             <PrivateRoute allowedRoles={['super_admin', 'company_admin']}>
               <UserManagement />
+            </PrivateRoute>
+          } 
+        />
+        
+        {/* v7.0: Labor munkatárs munkalista */}
+        <Route 
+          path="worklist" 
+          element={
+            <PrivateRoute allowedRoles={['labor_staff']}>
+              <WorkList />
+            </PrivateRoute>
+          } 
+        />
+        
+        {/* v7.0: Vizsgálati eredmények kitöltése */}
+        <Route 
+          path="test-results/:id" 
+          element={
+            <PrivateRoute allowedRoles={['labor_staff', 'super_admin']}>
+              <TestResultsPanel />
             </PrivateRoute>
           } 
         />
