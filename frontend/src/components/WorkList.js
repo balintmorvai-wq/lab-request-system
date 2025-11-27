@@ -20,10 +20,15 @@ function WorkList() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // all, in_progress, validation_pending, completed
   const [searchTerm, setSearchTerm] = useState(''); // v7.0.11: Kereső
+  const [departmentFilter, setDepartmentFilter] = useState('all'); // v7.0.14: Department szűrő (super_admin)
+  const [departments, setDepartments] = useState([]); // v7.0.14: Department lista
 
   useEffect(() => {
     fetchWorklist();
-  }, []);
+    if (user?.role === 'super_admin') {
+      fetchDepartments();
+    }
+  }, [user]);
 
   const fetchWorklist = async () => {
     try {
@@ -38,10 +43,30 @@ function WorkList() {
     }
   };
 
-  // v7.0.11: Kereső + szűrő kombinálva
+  const fetchDepartments = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/departments`, {
+        headers: getAuthHeaders()
+      });
+      setDepartments(response.data);
+    } catch (error) {
+      console.error('Department lekérési hiba:', error);
+    }
+  };
+
+  // v7.0.14: Kereső + státusz + department szűrő kombinálva
   const filteredWorklist = worklist.filter(req => {
     // Státusz szűrő
     if (filter !== 'all' && req.status !== filter) return false;
+    
+    // v7.0.14: Department szűrés (super_admin)
+    if (departmentFilter !== 'all') {
+      // Csak azok a kérések maradnak, amikben van olyan vizsgálat ami az adott department-hez tartozik
+      const hasMatchingDept = req.test_list && req.test_list.some(test => 
+        test.department_name === departmentFilter
+      );
+      if (!hasMatchingDept) return false;
+    }
     
     // Keresés (request_number, sample_description, internal_id, company_name)
     if (searchTerm) {
@@ -108,7 +133,11 @@ function WorkList() {
         <div className="p-6 bg-gray-50">
           {/* Statisztikák */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-            <div className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200">
+            {/* Összes */}
+            <button
+              onClick={() => setFilter('all')}
+              className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:border-gray-400 hover:shadow-lg transition-all text-left"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Összes</p>
@@ -116,9 +145,13 @@ function WorkList() {
                 </div>
                 <Clipboard className="w-7 h-7 text-gray-500" />
               </div>
-            </div>
+            </button>
 
-            <div className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200">
+            {/* Végrehajtás alatt */}
+            <button
+              onClick={() => setFilter('in_progress')}
+              className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:border-yellow-400 hover:shadow-lg transition-all text-left"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Végrehajtás alatt</p>
@@ -128,9 +161,13 @@ function WorkList() {
                 </div>
                 <Clock className="w-7 h-7 text-yellow-600" />
               </div>
-            </div>
+            </button>
 
-            <div className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200">
+            {/* Validálásra vár */}
+            <button
+              onClick={() => setFilter('validation_pending')}
+              className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:border-purple-400 hover:shadow-lg transition-all text-left"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Validálásra vár</p>
@@ -140,9 +177,13 @@ function WorkList() {
                 </div>
                 <AlertCircle className="w-7 h-7 text-purple-600" />
               </div>
-            </div>
+            </button>
 
-            <div className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200">
+            {/* Elkészült */}
+            <button
+              onClick={() => setFilter('completed')}
+              className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:border-green-400 hover:shadow-lg transition-all text-left"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Elkészült</p>
@@ -152,7 +193,7 @@ function WorkList() {
                 </div>
                 <CheckCircle className="w-7 h-7 text-green-600" />
               </div>
-            </div>
+            </button>
           </div>
 
           {/* Kereső + Szűrők */}
@@ -213,6 +254,38 @@ function WorkList() {
               </button>
             </div>
           </div>
+
+          {/* v7.0.14: Department szűrő gombok (super_admin) */}
+          {user?.role === 'super_admin' && departments.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm font-semibold text-gray-700 mb-2">Szervezeti egység szűrés:</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setDepartmentFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    departmentFilter === 'all'
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  Összes
+                </button>
+                {departments.map((dept) => (
+                  <button
+                    key={dept.id}
+                    onClick={() => setDepartmentFilter(dept.name)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      departmentFilter === dept.name
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {dept.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       {/* v7.0.11: Kompakt professzionális táblázat */}

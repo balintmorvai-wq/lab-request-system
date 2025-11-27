@@ -117,7 +117,7 @@ function Layout() {
     // v7.0: Labor staff számára külön navigáció
     if (user?.role === 'labor_staff') {
       navigation = [
-        { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        // v7.0.13: Dashboard eltávolítva - labor staff egyből munkalistára megy
         { name: 'Munkalistám', href: '/worklist', icon: Clipboard },  // v7.0: Új menüpont
         { name: 'Minden kérés', href: '/requests', icon: FileText },
       ];

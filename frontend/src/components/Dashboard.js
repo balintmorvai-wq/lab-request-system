@@ -126,9 +126,12 @@ function Dashboard() {
         <h1 className="text-3xl font-bold text-gray-900">
           Üdvözlünk, {user?.name}!
         </h1>
-        <p className="text-gray-600 mt-1">
-          Itt az áttekintés a laborkéréseidről
-        </p>
+        {/* v7.0.13: Áttekintés szöveg csak company_user-nak (nem admin-oknak) */}
+        {user?.role === 'company_user' && (
+          <p className="text-gray-600 mt-1">
+            Itt az áttekintés a laborkéréseidről
+          </p>
+        )}
       </div>
 
       {(user?.role === 'company_user' || user?.role === 'company_admin') && (

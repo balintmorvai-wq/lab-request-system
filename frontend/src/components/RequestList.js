@@ -31,29 +31,9 @@ function RequestList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [departmentFilter, setDepartmentFilter] = useState('all'); // v7.0.13: Department szűrő
-  const [departments, setDepartments] = useState([]); // v7.0.13: Department lista
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-
-  // v7.0.13: Departments lekérése super_admin-nak
-  useEffect(() => {
-    if (user?.role === 'super_admin') {
-      fetchDepartments();
-    }
-  }, [user]);
-
-  const fetchDepartments = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/departments`, {
-        headers: getAuthHeaders()
-      });
-      setDepartments(response.data);
-    } catch (error) {
-      console.error('Department lekérési hiba:', error);
-    }
-  };
 
   // v6.0: Check URL params for status filter
   useEffect(() => {
@@ -69,7 +49,7 @@ function RequestList() {
 
   useEffect(() => {
     filterRequests();
-  }, [requests, searchTerm, statusFilter, departmentFilter]); // v7.0.13: departmentFilter
+  }, [requests, searchTerm, statusFilter]); // v7.0.13: departmentFilter eltávolítva (csak WorkList-en van)
 
   const fetchRequests = async () => {
     try {
@@ -142,16 +122,6 @@ function RequestList() {
         (req.company_name && req.company_name.toLowerCase().includes(term)) ||
         (req.user_name && req.user_name.toLowerCase().includes(term))
       );
-    }
-
-    // v7.0.13: Department szűrés (super_admin)
-    if (departmentFilter !== 'all') {
-      filtered = filtered.filter(req => {
-        // Csak azok a kérések maradnak, amikben van olyan vizsgálat ami az adott department-hez tartozik
-        return req.test_types && req.test_types.some(test => 
-          test.department_name === departmentFilter
-        );
-      });
     }
 
     // Státusz szűrés
@@ -336,38 +306,6 @@ function RequestList() {
             </select>
           </div>
         </div>
-
-        {/* v7.0.13: Department szűrő gombok (super_admin) */}
-        {user?.role === 'super_admin' && departments.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-sm font-semibold text-gray-700 mb-2">Szervezeti egység:</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setDepartmentFilter('all')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  departmentFilter === 'all'
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Összes
-              </button>
-              {departments.map((dept) => (
-                <button
-                  key={dept.id}
-                  onClick={() => setDepartmentFilter(dept.name)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    departmentFilter === dept.name
-                      ? 'bg-indigo-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {dept.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Requests List */}
@@ -444,7 +382,7 @@ function RequestList() {
                                 key={idx}
                                 className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200"
                               >
-                                {test}
+                                {typeof test === 'string' ? test : test.name}
                               </span>
                             ))}
                           </div>
