@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -56,7 +56,13 @@ os.makedirs(app.config['RESULT_ATTACHMENT_FOLDER'], exist_ok=True)  # v7.0
 
 # v6.6 Production: CORS with frontend domain
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-CORS(app, origins=[FRONTEND_URL, 'http://localhost:3000'])
+# v7.0.18: CORS fix - supports_credentials és resources
+CORS(app, 
+     resources={r"/api/*": {"origins": [FRONTEND_URL, 'http://localhost:3000', 'https://labsquare.netlify.app']}},
+     supports_credentials=True,
+     allow_headers=['Content-Type', 'Authorization'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+)
 
 # Lazy database initialization
 db = SQLAlchemy()
@@ -835,7 +841,7 @@ def export_test_types(current_user):
         if format_type == 'json':
             return jsonify({
                 'test_types': data,
-                'exported_at': datetime.utcnow().isoformat(),
+                'exported_at': datetime.datetime.utcnow().isoformat(),
                 'total_count': len(data)
             })
         
@@ -850,7 +856,7 @@ def export_test_types(current_user):
                 writer.writerows(data)
             
             response = Response(output.getvalue(), mimetype='text/csv')
-            response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
+            response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
             return response
         
         elif format_type == 'excel':
@@ -866,7 +872,7 @@ def export_test_types(current_user):
                 
                 output.seek(0)
                 response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
+                response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
                 return response
             except ImportError as e:
                 return jsonify({'error': f'pandas vagy openpyxl nincs telepítve: {str(e)}'}), 500
@@ -885,101 +891,108 @@ def export_test_types(current_user):
 @role_required('super_admin')
 def export_full_database(current_user):
     """Export teljes adatbázis (TestTypes, Departments, Categories, Companies)"""
-    format_type = request.args.get('format', 'json')
+    try:
+        format_type = request.args.get('format', 'json')
+        
+        # Test Types
+        test_types = []
+        for tt in TestType.query.all():
+            test_types.append({
+                'id': tt.id,
+                'name': tt.name,
+                'description': tt.description,
+                'standard': tt.standard,
+                'price': float(tt.price) if tt.price else None,
+                'cost_price': float(tt.cost_price) if tt.cost_price else None,
+                'turnaround_days': tt.turnaround_days,
+                'turnaround_time': tt.turnaround_time,
+                'measurement_time': tt.measurement_time,
+                'sample_prep_time': tt.sample_prep_time,
+                'sample_prep_required': tt.sample_prep_required,
+                'sample_prep_description': tt.sample_prep_description,
+                'evaluation_time': tt.evaluation_time,
+                'sample_quantity': tt.sample_quantity,
+                'hazard_level': tt.hazard_level,
+                'device': tt.device,
+                'department_id': tt.department_id,
+                'category_id': tt.category_id
+            })
+        
+        # Departments
+        departments = []
+        for dept in Department.query.all():
+            departments.append({
+                'id': dept.id,
+                'name': dept.name,
+                'description': dept.description
+            })
+        
+        # Categories
+        categories = []
+        for cat in RequestCategory.query.all():
+            categories.append({
+                'id': cat.id,
+                'name': cat.name,
+                'color': cat.color
+            })
+        
+        # Companies
+        companies = []
+        for comp in Company.query.all():
+            companies.append({
+                'id': comp.id,
+                'name': comp.name,
+                'tax_number': comp.tax_number,
+                'address': comp.address,
+                'contact_person': comp.contact_person,
+                'contact_email': comp.contact_email,
+                'contact_phone': comp.contact_phone
+            })
+        
+        full_data = {
+            'test_types': test_types,
+            'departments': departments,
+            'categories': categories,
+            'companies': companies,
+            'exported_at': datetime.datetime.utcnow().isoformat(),
+            'version': '7.0.17'
+        }
+        
+        if format_type == 'json':
+            return jsonify(full_data)
+        
+        elif format_type == 'excel':
+            try:
+                import pandas as pd
+                from io import BytesIO
+                
+                output = BytesIO()
+                
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    if test_types:
+                        pd.DataFrame(test_types).to_excel(writer, sheet_name='Test Types', index=False)
+                    if departments:
+                        pd.DataFrame(departments).to_excel(writer, sheet_name='Departments', index=False)
+                    if categories:
+                        pd.DataFrame(categories).to_excel(writer, sheet_name='Categories', index=False)
+                    if companies:
+                        pd.DataFrame(companies).to_excel(writer, sheet_name='Companies', index=False)
+                
+                output.seek(0)
+                response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                response.headers['Content-Disposition'] = f'attachment; filename=full_database_{datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
+                return response
+            except ImportError as e:
+                return jsonify({'error': f'pandas vagy openpyxl nincs telepítve: {str(e)}'}), 500
+        
+        else:
+            return jsonify({'error': 'Érvénytelen formátum. Használj: json, excel'}), 400
     
-    # Test Types
-    test_types = []
-    for tt in TestType.query.all():
-        test_types.append({
-            'id': tt.id,
-            'name': tt.name,
-            'description': tt.description,
-            'standard': tt.standard,
-            'price': tt.price,
-            'cost_price': tt.cost_price,
-            'turnaround_days': tt.turnaround_days,
-            'turnaround_time': tt.turnaround_time,
-            'measurement_time': tt.measurement_time,
-            'sample_prep_time': tt.sample_prep_time,
-            'sample_prep_required': tt.sample_prep_required,
-            'sample_prep_description': tt.sample_prep_description,
-            'evaluation_time': tt.evaluation_time,
-            'sample_quantity': tt.sample_quantity,
-            'hazard_level': tt.hazard_level,
-            'device': tt.device,
-            'department_id': tt.department_id,
-            'category_id': tt.category_id
-        })
-    
-    # Departments
-    departments = []
-    for dept in Department.query.all():
-        departments.append({
-            'id': dept.id,
-            'name': dept.name,
-            'description': dept.description
-        })
-    
-    # Categories
-    categories = []
-    for cat in RequestCategory.query.all():
-        categories.append({
-            'id': cat.id,
-            'name': cat.name,
-            'color': cat.color
-        })
-    
-    # Companies
-    companies = []
-    for comp in Company.query.all():
-        companies.append({
-            'id': comp.id,
-            'name': comp.name,
-            'tax_number': comp.tax_number,
-            'address': comp.address,
-            'contact_person': comp.contact_person,
-            'contact_email': comp.contact_email,
-            'contact_phone': comp.contact_phone
-        })
-    
-    full_data = {
-        'test_types': test_types,
-        'departments': departments,
-        'categories': categories,
-        'companies': companies,
-        'exported_at': datetime.utcnow().isoformat(),
-        'version': '7.0.15'
-    }
-    
-    if format_type == 'json':
-        return jsonify(full_data)
-    
-    elif format_type == 'excel':
-        try:
-            import pandas as pd
-            from io import BytesIO
-            
-            output = BytesIO()
-            
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                if test_types:
-                    pd.DataFrame(test_types).to_excel(writer, sheet_name='Test Types', index=False)
-                if departments:
-                    pd.DataFrame(departments).to_excel(writer, sheet_name='Departments', index=False)
-                if categories:
-                    pd.DataFrame(categories).to_excel(writer, sheet_name='Categories', index=False)
-                if companies:
-                    pd.DataFrame(companies).to_excel(writer, sheet_name='Companies', index=False)
-            
-            output.seek(0)
-            response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            response.headers['Content-Disposition'] = f'attachment; filename=full_database_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
-            return response
-        except ImportError:
-            return jsonify({'error': 'pandas és openpyxl szükséges az Excel exporthoz'}), 500
-    
-    else:
-        return jsonify({'error': 'Érvénytelen formátum. Használj: json, excel'}), 400
+    except Exception as e:
+        print(f"Full database export hiba: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Export hiba: {str(e)}'}), 500
 
 @app.route('/api/import/test-types', methods=['POST'])
 @token_required
