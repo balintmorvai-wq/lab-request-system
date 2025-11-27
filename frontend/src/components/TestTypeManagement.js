@@ -14,8 +14,7 @@ import {
   Eye,
   EyeOff,
   Download,     // v7.0.15: Export
-  Upload,       // v7.0.15: Import
-  Database      // v7.0.15: Full DB export
+  Upload        // v7.0.15: Import
 } from 'lucide-react';
 
 function TestTypeManagement() {
@@ -205,10 +204,9 @@ function TestTypeManagement() {
   };
 
   // v7.0.15: Export/Import függvények
-  const handleExport = async (format, fullDatabase = false) => {
+  const handleExport = async (format) => {
     try {
-      const endpoint = fullDatabase ? '/export/full-database' : '/export/test-types';
-      const response = await axios.get(`${API_URL}${endpoint}?format=${format}`, {
+      const response = await axios.get(`${API_URL}/export/test-types?format=${format}`, {
         headers: getAuthHeaders(),
         responseType: format === 'json' ? 'json' : 'blob'
       });
@@ -220,7 +218,7 @@ function TestTypeManagement() {
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${fullDatabase ? 'full_database' : 'test_types'}_${new Date().toISOString().split('T')[0]}.json`;
+        link.download = `test_types_${new Date().toISOString().split('T')[0]}.json`;
         link.click();
         URL.revokeObjectURL(url);
       } else {
@@ -229,7 +227,7 @@ function TestTypeManagement() {
         const link = document.createElement('a');
         link.href = url;
         const ext = format === 'csv' ? 'csv' : 'xlsx';
-        link.download = `${fullDatabase ? 'full_database' : 'test_types'}_${new Date().toISOString().split('T')[0]}.${ext}`;
+        link.download = `test_types_${new Date().toISOString().split('T')[0]}.${ext}`;
         link.click();
         URL.revokeObjectURL(url);
       }
@@ -341,40 +339,22 @@ function TestTypeManagement() {
                 <div className="p-2">
                   <p className="text-xs font-semibold text-gray-600 uppercase px-2 py-1">Vizsgálattípusok</p>
                   <button
-                    onClick={() => handleExport('json', false)}
+                    onClick={() => handleExport('json')}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
                   >
                     📄 JSON formátum
                   </button>
                   <button
-                    onClick={() => handleExport('csv', false)}
+                    onClick={() => handleExport('csv')}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
                   >
                     📊 CSV formátum
                   </button>
                   <button
-                    onClick={() => handleExport('excel', false)}
+                    onClick={() => handleExport('excel')}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
                   >
                     📗 Excel formátum
-                  </button>
-                  
-                  <div className="border-t border-gray-200 my-2"></div>
-                  
-                  <p className="text-xs font-semibold text-gray-600 uppercase px-2 py-1">Teljes adatbázis</p>
-                  <button
-                    onClick={() => handleExport('json', true)}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                  >
-                    <Database className="w-4 h-4" />
-                    JSON (teljes)
-                  </button>
-                  <button
-                    onClick={() => handleExport('excel', true)}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
-                  >
-                    <Database className="w-4 h-4" />
-                    Excel (teljes)
                   </button>
                 </div>
               </div>
