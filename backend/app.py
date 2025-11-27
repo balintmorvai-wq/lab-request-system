@@ -309,16 +309,34 @@ def create_notification(user_id, request_id, notif_type, message):
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        # v7.0.10: Token header-ből VAGY query parameter-ből
         token = request.headers.get('Authorization')
+        
+        # Ha nincs header-ben, próbáljuk query param-ból
+        if not token:
+            token = request.args.get('token')
+        
         if not token:
             return jsonify({'message': 'Token hiányzik!'}), 401
+        
         try:
+            # Bearer prefix eltávolítása ha van
             if token.startswith('Bearer '):
                 token = token[7:]
+            
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
             current_user = User.query.get(data['user_id'])
-        except:
+            
+            if not current_user:
+                return jsonify({'message': 'User nem található!'}), 401
+                
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token lejárt!'}), 401
+        except jwt.InvalidTokenError:
             return jsonify({'message': 'Token érvénytelen!'}), 401
+        except Exception as e:
+            return jsonify({'message': f'Token hiba: {str(e)}'}), 401
+            
         return f(current_user, *args, **kwargs)
     return decorated
 
@@ -1777,6 +1795,29 @@ def export_request_pdf(current_user, request_id):
         # API base URL melléklet linkekhez
         api_base_url = request.host_url.rstrip('/')  # pl. https://your-backend.railway.app
         
+        # v7.0.10: JWT token generálás PDF linkekhez
+        # FONTOS: current_user token-jét használjuk, hogy a PDF link működjön
+        try:
+            # Token lekérése header-ből vagy query param-ból
+            user_token = request.headers.get('Authorization')
+            if user_token and user_token.startswith('Bearer '):
+                user_token = user_token[7:]
+            elif not user_token:
+                user_token = request.args.get('token')
+            
+            # Ha nincs token, generálunk egy újat (24 órás érvényességgel)
+            if not user_token:
+                user_token = jwt.encode({
+                    'user_id': current_user.id,
+                    'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+                }, app.config['SECRET_KEY'], algorithm='HS256')
+        except Exception as e:
+            # Fallback: Új token generálás
+            user_token = jwt.encode({
+                'user_id': current_user.id,
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)
+            }, app.config['SECRET_KEY'], algorithm='HS256')
+        
         # Eredmények header
         results_title_style = ParagraphStyle(
             'ResultsTitle',
@@ -1824,9 +1865,9 @@ def export_request_pdf(current_user, request_id):
                 result_text = result.result_text or '-'
                 result_data.append(['Eredmény:', result_text])
                 
-                # Melléklet - v7.0.9: Kattintható link
+                # Melléklet - v7.0.10: Kattintható link token-nel
                 if result.attachment_filename:
-                    attachment_url = f"{api_base_url}/api/test-results/{result.id}/attachment"
+                    attachment_url = f"{api_base_url}/api/test-results/{result.id}/attachment?token={user_token}"
                     attachment_link = Paragraph(
                         f'<a href="{attachment_url}" color="blue"><u>{result.attachment_filename}</u></a>',
                         link_style
