@@ -1477,6 +1477,14 @@ def submit_for_validation(current_user, request_id):
     
     # Státusz frissítése
     req.status = 'validation_pending'
+    
+    # v7.0.4 FINAL: TestResult status is validation_pending-re
+    # Csak azokat a result-okat módosítjuk, amik completed (labor staff kitöltötte)
+    test_results = TestResult.query.filter_by(lab_request_id=request_id).all()
+    for result in test_results:
+        if result.status == 'completed':
+            result.status = 'validation_pending'
+    
     db.session.commit()
     
     # Értesítés az adminoknak

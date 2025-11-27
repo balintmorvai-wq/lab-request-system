@@ -75,72 +75,75 @@ function WorkList() {
 
   return (
     <div className="space-y-6">
-      {/* Fejléc */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Munkalistám</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          {user.department?.name || 'Szervezeti egység'} - Folyamatban lévő laborkérések
+      {/* v7.0.4 FINAL: Sötét header - alfolyamat jelzés */}
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-6 shadow-xl">
+        <h1 className="text-2xl font-bold text-white flex items-center gap-3">
+          <Clipboard className="w-7 h-7" />
+          Munkalistám
+        </h1>
+        <p className="text-sm text-slate-300 mt-2">
+          {user.department_name || 'Szervezeti egység'} - Folyamatban lévő laborkérések nyomon követése
         </p>
       </div>
 
-      {/* Statisztikák */}
+      {/* Statisztikák - sötét design */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 p-4 rounded-lg shadow-lg border border-slate-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Összes</p>
-              <p className="text-2xl font-bold text-gray-900">{worklist.length}</p>
+              <p className="text-sm text-slate-300">Összes</p>
+              <p className="text-2xl font-bold text-white">{worklist.length}</p>
             </div>
-            <Clipboard className="w-8 h-8 text-gray-400" />
+            <Clipboard className="w-8 h-8 text-slate-400" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 p-4 rounded-lg shadow-lg border border-slate-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Folyamatban</p>
-              <p className="text-2xl font-bold text-yellow-600">
+              <p className="text-sm text-slate-300">Folyamatban</p>
+              <p className="text-2xl font-bold text-yellow-400">
                 {worklist.filter(r => r.status === 'in_progress').length}
               </p>
             </div>
-            <Clock className="w-8 h-8 text-yellow-400" />
+            <Clock className="w-8 h-8 text-yellow-500" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 p-4 rounded-lg shadow-lg border border-slate-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Validálásra vár</p>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-sm text-slate-300">Validálásra vár</p>
+              <p className="text-2xl font-bold text-purple-400">
                 {worklist.filter(r => r.status === 'validation_pending').length}
               </p>
             </div>
-            <AlertCircle className="w-8 h-8 text-blue-400" />
+            <AlertCircle className="w-8 h-8 text-purple-500" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-lg shadow">
+        <div className="bg-gradient-to-br from-slate-700 to-slate-800 p-4 rounded-lg shadow-lg border border-slate-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Elkészült</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-sm text-slate-300">Elkészült</p>
+              <p className="text-2xl font-bold text-green-400">
                 {worklist.filter(r => r.status === 'completed').length}
               </p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-400" />
+            <CheckCircle className="w-8 h-8 text-green-500" />
           </div>
         </div>
       </div>
 
-      {/* Szűrők */}
-      <div className="bg-white rounded-lg shadow p-4">
+      {/* Szűrők - sötét design */}
+      <div className="bg-slate-800 rounded-lg shadow-lg p-4 border border-slate-700">
         <div className="flex gap-2">
           <button
             onClick={() => setFilter('all')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               filter === 'all'
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600'
             }`}
           >
             Összes ({worklist.length})
@@ -149,8 +152,8 @@ function WorkList() {
             onClick={() => setFilter('in_progress')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               filter === 'in_progress'
-                ? 'bg-yellow-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-yellow-600 text-white shadow-lg'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600'
             }`}
           >
             Folyamatban ({worklist.filter(r => r.status === 'in_progress').length})
@@ -159,8 +162,8 @@ function WorkList() {
             onClick={() => setFilter('validation_pending')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               filter === 'validation_pending'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-purple-600 text-white shadow-lg'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600'
             }`}
           >
             Validálásra vár ({worklist.filter(r => r.status === 'validation_pending').length})
@@ -169,8 +172,8 @@ function WorkList() {
             onClick={() => setFilter('completed')}
             className={`px-4 py-2 rounded-lg transition-colors ${
               filter === 'completed'
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-green-600 text-white shadow-lg'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600 border border-slate-600'
             }`}
           >
             Elkészült ({worklist.filter(r => r.status === 'completed').length})
@@ -178,25 +181,25 @@ function WorkList() {
         </div>
       </div>
 
-      {/* Munkalista */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      {/* Munkalista - sötét design */}
+      <div className="bg-slate-800 rounded-lg shadow-xl overflow-hidden border border-slate-700">
         {filteredWorklist.length === 0 ? (
-          <div className="px-6 py-12 text-center text-gray-500">
-            <Clipboard className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+          <div className="px-6 py-12 text-center text-slate-400">
+            <Clipboard className="w-12 h-12 mx-auto mb-4 text-slate-500" />
             <p>Nincs megjeleníthető kérés</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-slate-700">
             {filteredWorklist.map((request) => {
               const StatusIcon = statusConfig[request.status]?.icon || Clock;
               
               return (
-                <div key={request.id} className="p-4 hover:bg-gray-50 transition-colors">
+                <div key={request.id} className="p-4 hover:bg-slate-750 transition-colors bg-slate-800">
                   <div className="flex items-start justify-between gap-4">
                     {/* Bal oldal - Kérés infó */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-gray-900">
+                        <h3 className="font-semibold text-white">
                           {request.request_number}
                         </h3>
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusConfig[request.status]?.color}`}>
@@ -209,17 +212,17 @@ function WorkList() {
                         )}
                       </div>
 
-                      <p className="text-sm text-gray-600 mb-2">
+                      <p className="text-sm text-slate-300 mb-2">
                         {request.sample_description || request.internal_id}
                       </p>
 
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
+                      <div className="flex items-center gap-4 text-xs text-slate-400">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5" />
                           {new Date(request.created_at).toLocaleDateString('hu-HU')}
                         </span>
                         {request.deadline && (
-                          <span className="flex items-center gap-1 text-orange-600">
+                          <span className="flex items-center gap-1 text-orange-400">
                             <Clock className="w-3.5 h-3.5" />
                             Határidő: {new Date(request.deadline).toLocaleDateString('hu-HU')}
                           </span>
@@ -279,33 +282,33 @@ function WorkList() {
                     </div>
 
                     {/* Jobb oldal - Műveletek */}
-                    {request.status === 'completed' ? (
-                      <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg font-medium">
-                        <CheckCircle className="w-4 h-4" />
-                        Elkészült
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => navigate(`/test-results/${request.id}`)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                          user?.role === 'super_admin' && request.status === 'validation_pending'
-                            ? 'bg-purple-600 text-white hover:bg-purple-700'
-                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                        }`}
-                      >
-                        {user?.role === 'super_admin' && request.status === 'validation_pending' ? (
-                          <>
-                            <CheckCircle className="w-4 h-4" />
-                            Validálás
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-4 h-4" />
-                            Végrehajtás
-                          </>
-                        )}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => navigate(`/test-results/${request.id}`)}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                        request.status === 'completed'
+                          ? 'bg-green-600 text-white hover:bg-green-700'
+                          : user?.role === 'super_admin' && request.status === 'validation_pending'
+                          ? 'bg-purple-600 text-white hover:bg-purple-700'
+                          : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                      }`}
+                    >
+                      {request.status === 'completed' ? (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          Eredmények
+                        </>
+                      ) : user?.role === 'super_admin' && request.status === 'validation_pending' ? (
+                        <>
+                          <CheckCircle className="w-4 h-4" />
+                          Validálás
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-4 h-4" />
+                          Végrehajtás
+                        </>
+                      )}
+                    </button>
                   </div>
                 </div>
               );

@@ -14,7 +14,8 @@ import {
   XCircle,
   Eye,
   Download,
-  Trash2
+  Trash2,
+  Clipboard  // v7.0.4 FINAL: Munkalista ikon
 } from 'lucide-react';
 
 function Dashboard() {
@@ -269,27 +270,31 @@ function Dashboard() {
         </button>
       </div>
 
-      {/* v7.0.1: Munkalista státuszok (csak super_admin-nak) */}
+      {/* v7.0.4 FINAL: Munkalista státuszok - sötét design (alfolyamat) */}
       {user?.role === 'super_admin' && (
         <>
-          <div className="mt-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Munkalista státuszok</h2>
+          <div className="mt-6 bg-gradient-to-r from-slate-800 to-slate-900 rounded-lg p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-white mb-1 flex items-center gap-2">
+              <Clipboard className="w-5 h-5" />
+              Munkalista státuszok
+            </h2>
+            <p className="text-sm text-slate-300">Labor végrehajtás nyomon követése</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
             {/* In Progress */}
             <button
               onClick={() => navigate('/worklist')}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
+              className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg shadow-lg p-6 hover:shadow-xl transition-all cursor-pointer text-left w-full border border-slate-600"
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600">Folyamatban (Labor)</p>
-                  <p className="text-3xl font-bold text-yellow-600 mt-2">
+                  <p className="text-sm font-medium text-slate-300">Folyamatban (Labor)</p>
+                  <p className="text-3xl font-bold text-yellow-400 mt-2">
                     {stats?.by_status?.in_progress || 0}
                   </p>
                 </div>
-                <div className="bg-yellow-100 rounded-full p-3">
-                  <Clock className="w-6 h-6 text-yellow-600" />
+                <div className="bg-yellow-900/30 rounded-full p-3 border border-yellow-700">
+                  <Clock className="w-6 h-6 text-yellow-400" />
                 </div>
               </div>
             </button>
@@ -297,17 +302,17 @@ function Dashboard() {
             {/* Validation Pending */}
             <button
               onClick={() => navigate('/worklist')}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
+              className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg shadow-lg p-6 hover:shadow-xl transition-all cursor-pointer text-left w-full border border-slate-600"
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600">Validálásra vár</p>
-                  <p className="text-3xl font-bold text-orange-600 mt-2">
+                  <p className="text-sm font-medium text-slate-300">Validálásra vár</p>
+                  <p className="text-3xl font-bold text-purple-400 mt-2">
                     {stats?.by_status?.validation_pending || 0}
                   </p>
                 </div>
-                <div className="bg-orange-100 rounded-full p-3">
-                  <AlertCircle className="w-6 h-6 text-orange-600" />
+                <div className="bg-purple-900/30 rounded-full p-3 border border-purple-700">
+                  <AlertCircle className="w-6 h-6 text-purple-400" />
                 </div>
               </div>
             </button>
@@ -315,17 +320,17 @@ function Dashboard() {
             {/* Completed (Worklist) */}
             <button
               onClick={() => navigate('/worklist')}
-              className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
+              className="bg-gradient-to-br from-slate-700 to-slate-800 rounded-lg shadow-lg p-6 hover:shadow-xl transition-all cursor-pointer text-left w-full border border-slate-600"
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-600">Elkészült (Labor)</p>
-                  <p className="text-3xl font-bold text-green-600 mt-2">
+                  <p className="text-sm font-medium text-slate-300">Elkészült (Labor)</p>
+                  <p className="text-3xl font-bold text-green-400 mt-2">
                     {stats?.by_status?.completed || 0}
                   </p>
                 </div>
-                <div className="bg-green-100 rounded-full p-3">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
+                <div className="bg-green-900/30 rounded-full p-3 border border-green-700">
+                  <CheckCircle className="w-6 h-6 text-green-400" />
                 </div>
               </div>
             </button>

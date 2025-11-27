@@ -286,6 +286,9 @@ function TestResultsPanel() {
   
   // v7.0.3: Admin validation mode
   const isAdminValidationMode = user?.role === 'super_admin' && request.status === 'validation_pending';
+  
+  // v7.0.4 FINAL: Readonly mode if completed
+  const isReadOnlyMode = request.status === 'completed';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -313,33 +316,37 @@ function TestResultsPanel() {
               </div>
             </div>
 
-            {/* v7.0.3: Different button for admin validation mode */}
-            {isAdminValidationMode ? (
-              <button
-                onClick={completeValidation}
-                disabled={saving || completedCount < testResults.length}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  completedCount < testResults.length
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-purple-600 text-white hover:bg-purple-700'
-                }`}
-              >
-                <Check className="w-4 h-4" />
-                Kérés lezárása
-              </button>
-            ) : (
-              <button
-                onClick={submitForValidation}
-                disabled={saving || completedCount < myTests.length}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  completedCount < myTests.length
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-green-600 text-white hover:bg-green-700'
-                }`}
-              >
-                <Send className="w-4 h-4" />
-                Validálásra küldés
-              </button>
+            {/* v7.0.4 FINAL: Header gomb - csak ha nem completed */}
+            {request.status !== 'completed' && (
+              <>
+                {isAdminValidationMode ? (
+                  <button
+                    onClick={completeValidation}
+                    disabled={saving || completedCount < testResults.length}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      completedCount < testResults.length
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-purple-600 text-white hover:bg-purple-700'
+                    }`}
+                  >
+                    <Check className="w-4 h-4" />
+                    Kérés lezárása
+                  </button>
+                ) : (
+                  <button
+                    onClick={submitForValidation}
+                    disabled={saving || completedCount < myTests.length}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      completedCount < myTests.length
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-green-600 text-white hover:bg-green-700'
+                    }`}
+                  >
+                    <Send className="w-4 h-4" />
+                    Validálásra küldés
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -427,9 +434,91 @@ function TestResultsPanel() {
             </div>
           </div>
 
-          {/* JOBB OLDAL - Saját vizsgálatok kitöltése VAGY Admin validation */}
+          {/* JOBB OLDAL - Saját vizsgálatok VAGY Admin validation VAGY Readonly */}
           <div className="space-y-4">
-            {isAdminValidationMode ? (
+            {isReadOnlyMode ? (
+              <>
+                {/* v7.0.4 FINAL: Readonly mode - completed kérés */}
+                <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
+                  <h2 className="text-lg font-semibold text-green-900 mb-2 flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5" />
+                    Elkészült vizsgálatok
+                  </h2>
+                  <p className="text-sm text-green-700">
+                    Ez a kérés lezárva. Az eredmények megtekinthetők, de nem szerkeszthetők.
+                  </p>
+                </div>
+
+                {testResults.length === 0 ? (
+                  <div className="bg-white rounded-lg shadow p-6 text-center text-gray-500">
+                    <AlertCircle className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                    <p>Nincs vizsgálat ebben a kérésben.</p>
+                  </div>
+                ) : (
+                  testResults.map((testResult) => (
+                    <div key={testResult.test_type_id} className="bg-white rounded-lg shadow p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">
+                            {testResult.test_type_name}
+                          </h3>
+                          {testResult.test_type_description && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {testResult.test_type_description}
+                            </p>
+                          )}
+                          {testResult.test_type_department && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Szervezeti egység: {testResult.test_type_department}
+                            </p>
+                          )}
+                        </div>
+                        <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                          <Check className="w-3 h-3" />
+                          Elkészült
+                        </span>
+                      </div>
+
+                      {/* Eredmény (readonly) */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Eredmény
+                        </label>
+                        <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 min-h-[100px] whitespace-pre-wrap">
+                          {testResult.result_text || <span className="text-gray-400">Nincs eredmény</span>}
+                        </div>
+                      </div>
+
+                      {/* Melléklet */}
+                      {testResult.attachment_filename && (
+                        <div className="mb-4">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Melléklet
+                          </label>
+                          <button
+                            onClick={() => downloadAttachment(testResult.result_id, testResult.attachment_filename)}
+                            className="flex items-center gap-2 px-4 py-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          >
+                            <Download className="w-4 h-4" />
+                            {testResult.attachment_filename}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Kitöltő és validáló adatai */}
+                      {testResult.completed_by && (
+                        <div className="text-xs text-gray-500 border-t pt-3 mt-3">
+                          <p>Kitöltötte: {testResult.completed_by} • {new Date(testResult.completed_at).toLocaleString('hu-HU')}</p>
+                          {testResult.validated_by && testResult.validated_at && (
+                            <p className="mt-1">Validálta: {testResult.validated_by} • {new Date(testResult.validated_at).toLocaleString('hu-HU')}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </>
+            ) : isAdminValidationMode ? (
               <>
                 {/* v7.0.3: Admin validation mode */}
                 <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
@@ -520,7 +609,7 @@ function TestResultsPanel() {
                       )}
 
                       {/* Admin validation gombok */}
-                      {testResult.status !== 'completed' ? (
+                      {testResult.status === 'validation_pending' ? (
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleApprove(testResult.result_id)}
@@ -543,7 +632,7 @@ function TestResultsPanel() {
                             Visszaküld
                           </button>
                         </div>
-                      ) : (
+                      ) : testResult.status === 'completed' ? (
                         <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-center">
                           <p className="text-sm font-medium text-green-800">✓ Validálva</p>
                           {testResult.validated_by && testResult.validated_at && (
@@ -551,6 +640,15 @@ function TestResultsPanel() {
                               {testResult.validated_by} • {new Date(testResult.validated_at).toLocaleString('hu-HU')}
                             </p>
                           )}
+                        </div>
+                      ) : testResult.status === 'in_progress' ? (
+                        <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-center">
+                          <p className="text-sm font-medium text-orange-800">🔄 Javításra visszaküldve</p>
+                          <p className="text-xs text-orange-700 mt-1">Labor staff javítja</p>
+                        </div>
+                      ) : (
+                        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg text-center">
+                          <p className="text-sm text-gray-600">Nincs eredmény</p>
                         </div>
                       )}
                     </div>
