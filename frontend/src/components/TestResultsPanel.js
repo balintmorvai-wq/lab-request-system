@@ -9,6 +9,7 @@ import {
   FileText,
   Upload,
   Check,
+  CheckCircle,  // v7.0.5: Readonly mode header
   Clock,
   AlertCircle,
   Download,
