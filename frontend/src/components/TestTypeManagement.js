@@ -236,7 +236,7 @@ function TestTypeManagement() {
     const file = event.target.files[0];
     if (!file) return;
 
-    if (!confirm(`Biztosan importálod a(z) ${file.name} fájlt? Ez módosíthatja a meglévő adatokat!`)) {
+    if (!window.confirm(`Biztosan importálod a(z) ${file.name} fájlt? Ez módosíthatja a meglévő adatokat!`)) {
       event.target.value = '';
       return;
     }
