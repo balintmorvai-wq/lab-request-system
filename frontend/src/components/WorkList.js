@@ -65,7 +65,13 @@ function WorkList() {
     }
     
     // 2. Státusz szűrés
-    if (filter !== 'all' && req.status !== filter) return false;
+    // v7.0.24: 'executed' speciális eset - kérések, ahol van 'executed' test result
+    if (filter === 'executed') {
+      const hasExecutedTest = req.test_list && req.test_list.some(test => test.status === 'executed');
+      if (!hasExecutedTest) return false;
+    } else if (filter !== 'all' && req.status !== filter) {
+      return false;
+    }
     
     // 3. Keresés (request_number, sample_description, internal_id, company_name)
     if (searchTerm) {
@@ -82,6 +88,7 @@ function WorkList() {
   });
 
   // v7.0.15: Vizsgálatok száma department szerint
+  // v7.0.24: 'executed' speciális kezelés
   const getTestCountByStatus = (status) => {
     const relevantRequests = worklist.filter(req => {
       // Department szűrés
@@ -93,6 +100,10 @@ function WorkList() {
       }
       // Státusz szűrés
       if (status === 'all') return true;
+      if (status === 'executed') {
+        // Speciális: van-e 'executed' test result?
+        return req.test_list && req.test_list.some(test => test.status === 'executed');
+      }
       return req.status === status;
     });
 
@@ -125,9 +136,14 @@ function WorkList() {
       color: 'bg-yellow-100 text-yellow-800',
       icon: Clock
     },
+    executed: {
+      label: 'Végrehajtott',
+      color: 'bg-blue-100 text-blue-800',
+      icon: CheckCircle
+    },
     validation_pending: {
       label: 'Validálásra beküldött',
-      color: 'bg-blue-100 text-blue-800',
+      color: 'bg-purple-100 text-purple-800',
       icon: AlertCircle
     },
     completed: {
@@ -168,8 +184,8 @@ function WorkList() {
 
         {/* v7.0.16: Statisztikák Grid + Kereső */}
         <div className="p-6 bg-gray-50">
-          {/* v7.0.16: Statisztika kártyák LEGFELÜL */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          {/* v7.0.24: Statisztika kártyák - Első sor (3 gomb) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             {/* Összes */}
             <button
               onClick={() => setFilter('all')}
@@ -209,6 +225,30 @@ function WorkList() {
               </div>
             </button>
 
+            {/* v7.0.24: Végrehajtott (executed test results) */}
+            <button
+              onClick={() => setFilter('executed')}
+              className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:border-blue-400 hover:shadow-lg transition-all text-left"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Végrehajtott</p>
+                  <p className="text-2xl font-bold text-blue-600 mt-1">
+                    {worklist.filter(req => {
+                      const hasExecutedTest = req.test_list && req.test_list.some(test => test.status === 'executed');
+                      if (!hasExecutedTest) return false;
+                      if (departmentFilter === 'all') return true;
+                      return req.test_list && req.test_list.some(test => test.department_name === departmentFilter);
+                    }).length}
+                  </p>
+                </div>
+                <CheckCircle className="w-7 h-7 text-blue-600" />
+              </div>
+            </button>
+          </div>
+
+          {/* v7.0.24: Statisztika kártyák - Második sor (2 gomb) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* Validálásra vár */}
             <button
               onClick={() => setFilter('validation_pending')}
@@ -317,6 +357,16 @@ function WorkList() {
                 }`}
               >
                 Végrehajtás ({getTestCountByStatus('in_progress')} vizsgálat)
+              </button>
+              <button
+                onClick={() => setFilter('executed')}
+                className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                  filter === 'executed'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-blue-300'
+                }`}
+              >
+                Végrehajtott ({getTestCountByStatus('executed')} vizsgálat)
               </button>
               <button
                 onClick={() => setFilter('validation_pending')}
