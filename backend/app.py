@@ -1774,6 +1774,9 @@ def export_request_pdf(current_user, request_id):
     if req.status == 'completed':
         elements.append(PageBreak())  # Új oldal az eredményeknek
         
+        # API base URL melléklet linkekhez
+        api_base_url = request.host_url.rstrip('/')  # pl. https://your-backend.railway.app
+        
         # Eredmények header
         results_title_style = ParagraphStyle(
             'ResultsTitle',
@@ -1786,6 +1789,16 @@ def export_request_pdf(current_user, request_id):
         )
         elements.append(Paragraph('VIZSGÁLATI EREDMÉNYEK', results_title_style))
         elements.append(Spacer(1, 0.5*cm))
+        
+        # Link style mellékletekhez
+        link_style = ParagraphStyle(
+            'AttachmentLink',
+            parent=styles['Normal'],
+            fontName=default_font,
+            fontSize=10,
+            textColor=colors.HexColor('#2563EB'),  # Kék link
+            underline=True
+        )
         
         # TestResult-ok lekérdezése
         test_results = TestResult.query.filter_by(lab_request_id=request_id).all()
@@ -1811,9 +1824,14 @@ def export_request_pdf(current_user, request_id):
                 result_text = result.result_text or '-'
                 result_data.append(['Eredmény:', result_text])
                 
-                # Melléklet
+                # Melléklet - v7.0.9: Kattintható link
                 if result.attachment_filename:
-                    result_data.append(['Melléklet:', result.attachment_filename])
+                    attachment_url = f"{api_base_url}/api/test-results/{result.id}/attachment"
+                    attachment_link = Paragraph(
+                        f'<a href="{attachment_url}" color="blue"><u>{result.attachment_filename}</u></a>',
+                        link_style
+                    )
+                    result_data.append(['Melléklet:', attachment_link])
                 
                 # Kitöltő adatok
                 completed_by_name = result.completed_by.name if result.completed_by else '-'
@@ -1831,6 +1849,7 @@ def export_request_pdf(current_user, request_id):
                     ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F0FDF4')),  # Világos zöld
                     ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
                     ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),  # v7.0.9: Top align (link miatt)
                     ('FONTNAME', (0, 0), (0, -1), bold_font),
                     ('FONTNAME', (1, 0), (1, -1), default_font),
                     ('FONTSIZE', (0, 0), (-1, -1), 10),
