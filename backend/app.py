@@ -1199,7 +1199,23 @@ def delete_request(current_user, request_id):
             except Exception as e:
                 print(f"Melléklet törlési hiba: {e}")
     
-    # Kapcsolódó adatok törlése (notifications)
+    # v7.0.13: Kapcsolódó adatok törlése (foreign key constraints)
+    # TestResult-ok törlése (mellékletekkel együtt)
+    test_results = TestResult.query.filter_by(request_id=request_id).all()
+    for result in test_results:
+        if result.attachment_filename:
+            result_filepath = os.path.join(app.config['RESULT_ATTACHMENT_FOLDER'], result.attachment_filename)
+            if os.path.exists(result_filepath):
+                try:
+                    os.remove(result_filepath)
+                except Exception as e:
+                    print(f"TestResult melléklet törlési hiba: {e}")
+    TestResult.query.filter_by(request_id=request_id).delete()
+    
+    # LabRequestTestType kapcsolatok törlése
+    LabRequestTestType.query.filter_by(request_id=request_id).delete()
+    
+    # Notification-ok törlése
     Notification.query.filter_by(request_id=request_id).delete()
     
     # Kérés törlése

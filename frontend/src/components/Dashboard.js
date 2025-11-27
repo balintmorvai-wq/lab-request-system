@@ -142,132 +142,115 @@ function Dashboard() {
       )}
 
       {/* Status Cards - v6.1 Order: draft, pending, rejected, submitted, in_progress, completed */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Draft */}
-        <button
-          onClick={() => navigate('/requests?status=draft')}
-          className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600">Piszkozat</p>
-              <p className="text-xs text-gray-500">(szerkeszthető)</p>
-              <p className="text-3xl font-bold text-gray-600 mt-2">
-                {stats?.by_status?.draft || 0}
-              </p>
+      {/* v7.0.13: Laborkérések követése - kompakt dark design */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        {/* Header - Sötétebb mint munkalista (slate-700 vs indigo-600) */}
+        <div className="bg-gradient-to-r from-slate-700 to-slate-800 px-6 py-4">
+          <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Laborkérések követése
+          </h2>
+          <p className="text-sm text-slate-200 mt-0.5">Összes kérés állapot szerint</p>
+        </div>
+        
+        {/* Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50">
+          {/* Draft */}
+          <button
+            onClick={() => navigate('/requests?status=draft')}
+            className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-gray-400 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Piszkozat</p>
+                <p className="text-3xl font-bold text-gray-700 group-hover:text-gray-900">{stats?.by_status?.draft || 0}</p>
+              </div>
+              <div className="bg-gray-100 rounded-full p-3 border-2 border-gray-200 group-hover:bg-gray-200 transition-colors">
+                <Edit className="w-6 h-6 text-gray-600" />
+              </div>
             </div>
-            <div className="bg-gray-100 rounded-full p-3">
-              <Edit className="w-6 h-6 text-gray-600" />
-            </div>
-          </div>
-        </button>
+          </button>
 
-        {/* Pending Approval */}
-        <button
-          onClick={() => navigate('/requests?status=pending_approval')}
-          className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600">Céges jóváhagyásra vár</p>
-              <p className="text-3xl font-bold text-orange-600 mt-2">
-                {stats?.by_status?.pending_approval || 0}
-              </p>
+          {/* Pending Approval */}
+          <button
+            onClick={() => navigate('/requests?status=pending_approval')}
+            className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-orange-400 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Jóváhagyásra vár</p>
+                <p className="text-3xl font-bold text-orange-600 group-hover:text-orange-700">{stats?.by_status?.pending_approval || 0}</p>
+              </div>
+              <div className="bg-orange-100 rounded-full p-3 border-2 border-orange-200 group-hover:bg-orange-200 transition-colors">
+                <AlertCircle className="w-6 h-6 text-orange-600" />
+              </div>
             </div>
-            <div className="bg-orange-100 rounded-full p-3">
-              <AlertCircle className="w-6 h-6 text-orange-600" />
-            </div>
-          </div>
-        </button>
+          </button>
 
-        {/* Rejected */}
-        <button
-          onClick={() => navigate('/requests?status=rejected')}
-          className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600">Cég által elutasítva</p>
-              <p className="text-3xl font-bold text-red-600 mt-2">
-                {stats?.by_status?.rejected || 0}
-              </p>
+          {/* Rejected */}
+          <button
+            onClick={() => navigate('/requests?status=rejected')}
+            className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-red-400 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Elutasítva</p>
+                <p className="text-3xl font-bold text-red-600 group-hover:text-red-700">{stats?.by_status?.rejected || 0}</p>
+              </div>
+              <div className="bg-red-100 rounded-full p-3 border-2 border-red-200 group-hover:bg-red-200 transition-colors">
+                <XCircle className="w-6 h-6 text-red-600" />
+              </div>
             </div>
-            <div className="bg-red-100 rounded-full p-3">
-              <XCircle className="w-6 h-6 text-red-600" />
-            </div>
-          </div>
-        </button>
-      </div>
+          </button>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Submitted */}
-        <button
-          onClick={() => navigate('/requests?status=submitted')}
-          className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600">Beküldve</p>
-              <p className="text-3xl font-bold text-blue-600 mt-2">
-                {stats?.by_status?.submitted || 0}
-              </p>
-              {showCosts && stats?.revenue_by_status?.submitted && (
-                <p className="text-xs text-blue-500 mt-1">
-                  {stats.revenue_by_status.submitted.toLocaleString('hu-HU')} Ft
-                </p>
-              )}
+          {/* Submitted */}
+          <button
+            onClick={() => navigate('/requests?status=submitted')}
+            className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-blue-400 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Beküldve</p>
+                <p className="text-3xl font-bold text-blue-600 group-hover:text-blue-700">{stats?.by_status?.submitted || 0}</p>
+              </div>
+              <div className="bg-blue-100 rounded-full p-3 border-2 border-blue-200 group-hover:bg-blue-200 transition-colors">
+                <Clock className="w-6 h-6 text-blue-600" />
+              </div>
             </div>
-            <div className="bg-blue-100 rounded-full p-3">
-              <Clock className="w-6 h-6 text-blue-600" />
-            </div>
-          </div>
-        </button>
+          </button>
 
-        {/* In Progress */}
-        <button
-          onClick={() => navigate('/requests?status=in_progress')}
-          className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600">Folyamatban</p>
-              <p className="text-3xl font-bold text-yellow-600 mt-2">
-                {stats?.by_status?.in_progress || 0}
-              </p>
-              {showCosts && stats?.revenue_by_status?.in_progress && (
-                <p className="text-xs text-yellow-500 mt-1">
-                  {stats.revenue_by_status.in_progress.toLocaleString('hu-HU')} Ft
-                </p>
-              )}
+          {/* In Progress */}
+          <button
+            onClick={() => navigate('/requests?status=in_progress')}
+            className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-yellow-400 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Végrehajtás alatt</p>
+                <p className="text-3xl font-bold text-yellow-600 group-hover:text-yellow-700">{stats?.by_status?.in_progress || 0}</p>
+              </div>
+              <div className="bg-yellow-100 rounded-full p-3 border-2 border-yellow-200 group-hover:bg-yellow-200 transition-colors">
+                <TrendingUp className="w-6 h-6 text-yellow-600" />
+              </div>
             </div>
-            <div className="bg-yellow-100 rounded-full p-3">
-              <TrendingUp className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-        </button>
+          </button>
 
-        {/* Completed */}
-        <button
-          onClick={() => navigate('/requests?status=completed')}
-          className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow cursor-pointer text-left w-full"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-600">Elkészült</p>
-              <p className="text-3xl font-bold text-green-600 mt-2">
-                {stats?.by_status?.completed || 0}
-              </p>
-              {showCosts && stats?.revenue_by_status?.completed && (
-                <p className="text-xs text-green-500 mt-1">
-                  {stats.revenue_by_status.completed.toLocaleString('hu-HU')} Ft
-                </p>
-              )}
+          {/* Completed */}
+          <button
+            onClick={() => navigate('/requests?status=completed')}
+            className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-green-400 group"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Elkészült</p>
+                <p className="text-3xl font-bold text-green-600 group-hover:text-green-700">{stats?.by_status?.completed || 0}</p>
+              </div>
+              <div className="bg-green-100 rounded-full p-3 border-2 border-green-200 group-hover:bg-green-200 transition-colors">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              </div>
             </div>
-            <div className="bg-green-100 rounded-full p-3">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-        </button>
+          </button>
+        </div>
       </div>
 
       {/* v7.0.11: Munkalista státuszok - kompakt blokk design */}
@@ -340,108 +323,6 @@ function Dashboard() {
           </div>
         </div>
       )}
-
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Legutóbbi kérések</h2>
-        </div>
-        
-        <div className="divide-y divide-gray-200">
-          {recentRequests.length === 0 ? (
-            <div className="px-6 py-8 text-center text-gray-500">
-              Még nincsenek laborkérések
-            </div>
-          ) : (
-            recentRequests.map((request) => (
-              <div key={request.id} className="px-6 py-3 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center justify-between gap-4">
-                  {/* Azonosító és státusz */}
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <h3 className="font-semibold text-gray-900 text-sm truncate">
-                      {request.request_number || request.sample_id}
-                    </h3>
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full whitespace-nowrap ${statusColors[request.status]}`}>
-                      {statusLabels[request.status]}
-                    </span>
-                  </div>
-
-                  {/* Adatok */}
-                  <div className="hidden md:flex items-center gap-4 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <FileText className="w-3.5 h-3.5" />
-                      {request.test_types?.length || 0} vizsgálat
-                    </span>
-                    {showCosts && (
-                      <>
-                        <span>•</span>
-                        <span className="font-semibold text-indigo-600">
-                          {(request.total_price || 0).toLocaleString('hu-HU')} Ft
-                        </span>
-                      </>
-                    )}
-                    <span>•</span>
-                    <span>{new Date(request.created_at).toLocaleDateString('hu-HU')}</span>
-                  </div>
-
-                  {/* Műveletek */}
-                  <div className="flex items-center gap-2">
-                    {/* Megtekintés */}
-                    <button
-                      onClick={() => navigate(`/requests/${request.id}`)}
-                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-                      title="Megtekintés"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    
-                    {/* PDF letöltés */}
-                    <button
-                      onClick={() => downloadPDF(request.id, request.request_number || request.sample_id)}
-                      className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
-                      title="PDF letöltés"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
-                    
-                    {/* Szerkesztés (csak draft és nem labor_staff) */}
-                    {(user.role !== 'labor_staff' && request.status === 'draft') && (
-                      <button
-                        onClick={() => navigate(`/requests/edit/${request.id}`)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                        title="Szerkesztés"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                    )}
-                    
-                    {/* Törlés (saját draft vagy super admin) */}
-                    {((request.status === 'draft' && (request.user_id === user.id || user.role === 'company_admin')) || user.role === 'super_admin') && (
-                      <button
-                        onClick={() => deleteRequest(request.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                        title="Törlés"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {recentRequests.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-            <Link 
-              to="/requests"
-              className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
-            >
-              Összes kérés megtekintése →
-            </Link>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

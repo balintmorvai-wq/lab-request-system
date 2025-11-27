@@ -39,13 +39,20 @@ function PrivateRoute({ children, allowedRoles }) {
 function AppRoutes() {
   const { user } = useAuth();
   
+  // v7.0.13: Labor staff átirányítás munkalistára
+  const defaultRoute = user?.role === 'labor_staff' ? '/worklist' : '/dashboard';
+  
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+      <Route path="/login" element={user ? <Navigate to={defaultRoute} /> : <Login />} />
       
       <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-        <Route index element={<Navigate to="/dashboard" />} />
-        <Route path="dashboard" element={<Dashboard />} />
+        <Route index element={<Navigate to={defaultRoute} />} />
+        <Route path="dashboard" element={
+          user?.role === 'labor_staff' 
+            ? <Navigate to="/worklist" /> 
+            : <Dashboard />
+        } />
         <Route path="requests" element={<RequestList />} />
         <Route path="requests/new" element={<RequestForm />} />
         <Route path="requests/edit/:id" element={<RequestForm />} />

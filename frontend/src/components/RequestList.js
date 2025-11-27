@@ -31,9 +31,29 @@ function RequestList() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [departmentFilter, setDepartmentFilter] = useState('all'); // v7.0.13: Department szűrő
+  const [departments, setDepartments] = useState([]); // v7.0.13: Department lista
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [selectedRequestId, setSelectedRequestId] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+
+  // v7.0.13: Departments lekérése super_admin-nak
+  useEffect(() => {
+    if (user?.role === 'super_admin') {
+      fetchDepartments();
+    }
+  }, [user]);
+
+  const fetchDepartments = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/departments`, {
+        headers: getAuthHeaders()
+      });
+      setDepartments(response.data);
+    } catch (error) {
+      console.error('Department lekérési hiba:', error);
+    }
+  };
 
   // v6.0: Check URL params for status filter
   useEffect(() => {
@@ -49,7 +69,7 @@ function RequestList() {
 
   useEffect(() => {
     filterRequests();
-  }, [requests, searchTerm, statusFilter]);
+  }, [requests, searchTerm, statusFilter, departmentFilter]); // v7.0.13: departmentFilter
 
   const fetchRequests = async () => {
     try {
@@ -111,6 +131,7 @@ function RequestList() {
   const filterRequests = () => {
     let filtered = requests;
 
+    // Keresés
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(req =>
@@ -123,6 +144,17 @@ function RequestList() {
       );
     }
 
+    // v7.0.13: Department szűrés (super_admin)
+    if (departmentFilter !== 'all') {
+      filtered = filtered.filter(req => {
+        // Csak azok a kérések maradnak, amikben van olyan vizsgálat ami az adott department-hez tartozik
+        return req.test_types && req.test_types.some(test => 
+          test.department_name === departmentFilter
+        );
+      });
+    }
+
+    // Státusz szűrés
     if (statusFilter !== 'all') {
       filtered = filtered.filter(req => req.status === statusFilter);
     }
@@ -239,7 +271,7 @@ function RequestList() {
     critical: 'Kritikus'
   };
 
-  const canEditStatus = user?.role === 'super_admin' || user?.role === 'labor_staff';  // v7.0.1: lab_staff → labor_staff
+  const canEditStatus = user?.role === 'super_admin';  // v7.0.13: Csak super_admin válthat státuszt
   const canApprove = user?.role === 'company_admin';
   const showCosts = user?.role !== 'company_user';
 
@@ -304,6 +336,38 @@ function RequestList() {
             </select>
           </div>
         </div>
+
+        {/* v7.0.13: Department szűrő gombok (super_admin) */}
+        {user?.role === 'super_admin' && departments.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <p className="text-sm font-semibold text-gray-700 mb-2">Szervezeti egység:</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setDepartmentFilter('all')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  departmentFilter === 'all'
+                    ? 'bg-indigo-600 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Összes
+              </button>
+              {departments.map((dept) => (
+                <button
+                  key={dept.id}
+                  onClick={() => setDepartmentFilter(dept.name)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    departmentFilter === dept.name
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {dept.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Requests List */}
@@ -322,158 +386,165 @@ function RequestList() {
               return (
                 <div 
                   key={request.id} 
-                  className="p-6 hover:bg-gray-50 transition-colors"
+                  className="px-4 py-3 hover:bg-gray-50 transition-colors"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <h3 className="text-lg font-bold text-gray-900">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      {/* Header sor */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-base font-bold text-gray-900">
                           {request.request_number || request.sample_id}
                         </h3>
                         {request.internal_id && (
-                          <span className="text-sm text-gray-500">
+                          <span className="text-xs text-gray-500">
                             ({request.internal_id})
                           </span>
                         )}
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${statusConfig[request.status].color} flex items-center gap-1`}>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusConfig[request.status].color} flex items-center gap-1`}>
                           <StatusIcon className="w-3 h-3" />
                           {statusConfig[request.status].label}
                         </span>
-                        <span className={`text-sm ${urgencyColors[request.urgency]}`}>
+                        <span className={`text-xs font-bold ${urgencyColors[request.urgency]}`}>
                           {urgencyLabels[request.urgency]}
                         </span>
                       </div>
 
-                      <p className="text-gray-700 mb-2">{request.sample_description}</p>
+                      {/* Leírás */}
+                      <p className="text-sm text-gray-700 mb-1.5 font-medium">{request.sample_description}</p>
                       
-                      <div className="grid md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-gray-600">Vizsgálatok:</span>
-                          <span className="ml-2 font-medium">{request.test_types?.length || 0} db</span>
-                        </div>
-                        {showCosts && (
-                          <div>
-                            <span className="text-gray-600">Költség:</span>
-                            <span className="ml-2 font-semibold text-indigo-600">
-                              {(request.total_price || 0).toLocaleString('hu-HU')} Ft
-                            </span>
-                          </div>
-                        )}
-                        <div>
-                          <span className="text-gray-600">Hely:</span>
-                          <span className="ml-2 font-medium">{request.sampling_location}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-600">Cég:</span>
-                          <span className="ml-2 font-medium">{request.company_name}</span>
-                        </div>
-                        {(user?.role === 'company_admin' || user?.role === 'super_admin' || user?.role === 'lab_staff') && (
-                          <div>
-                            <span className="text-gray-600">Feladó:</span>
-                            <span className="ml-2 font-medium">{request.user_name}</span>
-                          </div>
-                        )}
-                        <div>
-                          <span className="text-gray-600">Létrehozva:</span>
-                          <span className="ml-2 font-medium">
-                            {new Date(request.created_at).toLocaleDateString('hu-HU')}
+                      {/* Adatok kompakt grid */}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 mb-2">
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium">Hely:</span> {request.sampling_location}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium">Cég:</span> {request.company_name}
+                        </span>
+                        {(user?.role === 'company_admin' || user?.role === 'super_admin' || user?.role === 'labor_staff') && (
+                          <span className="flex items-center gap-1">
+                            <span className="font-medium">Feladó:</span> {request.user_name}
                           </span>
-                        </div>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium">Létrehozva:</span> {new Date(request.created_at).toLocaleDateString('hu-HU')}
+                        </span>
+                        {showCosts && (
+                          <span className="flex items-center gap-1 font-semibold text-indigo-600">
+                            {(request.total_price || 0).toLocaleString('hu-HU')} Ft
+                          </span>
+                        )}
                       </div>
+
+                      {/* v7.0.13: Vizsgálatok kiírása badge-ekkel */}
+                      {request.test_types && request.test_types.length > 0 && (
+                        <div className="pt-2 border-t border-gray-100">
+                          <div className="flex flex-wrap gap-1.5">
+                            {request.test_types.map((test, idx) => (
+                              <span 
+                                key={idx}
+                                className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200"
+                              >
+                                {test}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="ml-4 flex gap-2">
-                      {/* Info Button */}
-                      {/* Edit Button for DRAFT and REJECTED - v6.5 */}
+                    {/* Jobb oldal - Gombok */}
+                    <div className="flex gap-1.5 items-start">
+                      {/* Edit Button for DRAFT and REJECTED */}
                       {(request.status === 'draft' || request.status === 'rejected') && user?.role === 'company_user' && (
                         <Link
                           to={`/requests/edit/${request.id}`}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                           title="Szerkesztés"
                         >
-                          <Edit2 className="w-5 h-5" />
+                          <Edit2 className="w-4 h-4" />
                         </Link>
                       )}
+                      
+                      {/* Info */}
                       <button
                         onClick={() => fetchRequestDetails(request.id)}
-                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         title="Részletek"
                       >
-                        <Info className="w-5 h-5" />
+                        <Info className="w-4 h-4" />
                       </button>
 
-                      {/* PDF Button - v7.0.8: eltérő megjelenés completed kérésnél */}
+                      {/* PDF */}
                       <button
                         onClick={() => downloadPDF(request.id, request.sample_id)}
-                        className={`p-2 rounded-lg transition-colors ${
+                        className={`p-1.5 rounded-lg transition-colors ${
                           request.status === 'completed' 
-                            ? 'text-emerald-600 hover:bg-emerald-50'  // Completed: sötétzöld FileCheck
-                            : 'text-green-600 hover:bg-green-50'      // Egyéb: zöld Download
+                            ? 'text-emerald-600 hover:bg-emerald-50'
+                            : 'text-green-600 hover:bg-green-50'
                         }`}
-                        title={request.status === 'completed' ? 'Eredményekkel bővített PDF letöltése' : 'PDF letöltés'}
+                        title={request.status === 'completed' ? 'Eredményekkel bővített PDF' : 'PDF letöltés'}
                       >
                         {request.status === 'completed' ? (
-                          <FileCheck className="w-5 h-5" />  // Completed: checkmark a file-on
+                          <FileCheck className="w-4 h-4" />
                         ) : (
-                          <Download className="w-5 h-5" />   // Egyéb: sima download
+                          <Download className="w-4 h-4" />
                         )}
                       </button>
 
-                      {/* v7.0.7: Eredmények megtekintése gomb - csak labor_staff/super_admin-nak */}
+                      {/* Eredmények megtekintése */}
                       {request.status === 'completed' && (user?.role === 'labor_staff' || user?.role === 'super_admin') && (
                         <button
                           onClick={() => navigate(`/test-results/${request.id}`)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Eredmények megtekintése"
+                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Eredmények"
                         >
-                          <Eye className="w-5 h-5" />
+                          <Eye className="w-4 h-4" />
                         </button>
                       )}
 
-                      {/* Approval Buttons (Company Admin only) */}
+                      {/* Approval Buttons */}
                       {canApprove && isPendingApproval && (
                         <>
                           <button
                             onClick={() => approveRequest(request.id)}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
                             title="Jóváhagyás"
                           >
-                            <CheckCircle className="w-5 h-5" />
+                            <CheckCircle className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => rejectRequest(request.id)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             title="Elutasítás"
                           >
-                            <XCircle className="w-5 h-5" />
+                            <XCircle className="w-4 h-4" />
                           </button>
                         </>
                       )}
 
-                      {/* v6.8 - Törlés gomb (saját piszkozat vagy super admin) */}
+                      {/* Törlés */}
                       {((request.status === 'draft' && request.user_id === user.id) || user.role === 'super_admin') && (
                         <button
                           onClick={() => deleteRequest(request.id)}
-                          className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                          className="p-1.5 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
                           title="Törlés"
                         >
-                          <Trash2 className="w-5 h-5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       )}
 
-                      {/* Status Update (Lab/Super Admin) */}
+                      {/* Státusz váltás - v7.0.13: Csak super_admin */}
                       {canEditStatus && (
                         <div className="relative">
                           <button
                             onClick={() => setSelectedRequestId(request.id === selectedRequestId ? null : request.id)}
-                            className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                            className="px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium"
                           >
-                            Státusz váltás
+                            Státusz
                           </button>
                           
                           {selectedRequestId === request.id && (
                             <div className={`absolute right-0 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 ${
-                              // v7.0.11: Utolsó 2 sornál felfelé nyílik
                               filteredRequests.indexOf(request) >= filteredRequests.length - 2
                                 ? 'bottom-full mb-2'
                                 : 'top-full mt-2'
