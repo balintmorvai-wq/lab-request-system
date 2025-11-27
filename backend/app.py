@@ -792,6 +792,283 @@ def delete_test_type(current_user, test_type_id):
     db.session.commit()
     return jsonify({'message': 'Vizsgálattípus törölve!'})
 
+# v7.0.15: Export/Import endpoints (karbantartókhoz)
+@app.route('/api/export/test-types', methods=['GET'])
+@token_required
+@role_required('super_admin')
+def export_test_types(current_user):
+    """Export test types in multiple formats: JSON, CSV, Excel"""
+    format_type = request.args.get('format', 'json')  # json, csv, excel
+    
+    test_types = TestType.query.all()
+    
+    data = []
+    for tt in test_types:
+        data.append({
+            'id': tt.id,
+            'name': tt.name,
+            'description': tt.description,
+            'standard': tt.standard,
+            'price': tt.price,
+            'cost_price': tt.cost_price,
+            'turnaround_days': tt.turnaround_days,
+            'turnaround_time': tt.turnaround_time,
+            'measurement_time': tt.measurement_time,
+            'sample_prep_time': tt.sample_prep_time,
+            'sample_prep_required': tt.sample_prep_required,
+            'sample_prep_description': tt.sample_prep_description,
+            'evaluation_time': tt.evaluation_time,
+            'sample_quantity': tt.sample_quantity,
+            'hazard_level': tt.hazard_level,
+            'device': tt.device,
+            'department_id': tt.department_id,
+            'department_name': tt.department.name if tt.department else None,
+            'category_id': tt.category_id,
+            'category_name': tt.category.name if tt.category else None
+        })
+    
+    if format_type == 'json':
+        return jsonify({
+            'test_types': data,
+            'exported_at': datetime.utcnow().isoformat(),
+            'total_count': len(data)
+        })
+    
+    elif format_type == 'csv':
+        import csv
+        from io import StringIO
+        
+        output = StringIO()
+        if len(data) > 0:
+            writer = csv.DictWriter(output, fieldnames=data[0].keys())
+            writer.writeheader()
+            writer.writerows(data)
+        
+        response = Response(output.getvalue(), mimetype='text/csv')
+        response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
+        return response
+    
+    elif format_type == 'excel':
+        try:
+            import pandas as pd
+            from io import BytesIO
+            
+            df = pd.DataFrame(data)
+            output = BytesIO()
+            
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='Test Types', index=False)
+            
+            output.seek(0)
+            response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            return response
+        except ImportError:
+            return jsonify({'error': 'pandas és openpyxl szükséges az Excel exporthoz'}), 500
+    
+    else:
+        return jsonify({'error': 'Érvénytelen formátum. Használj: json, csv, excel'}), 400
+
+@app.route('/api/export/full-database', methods=['GET'])
+@token_required
+@role_required('super_admin')
+def export_full_database(current_user):
+    """Export teljes adatbázis (TestTypes, Departments, Categories, Companies)"""
+    format_type = request.args.get('format', 'json')
+    
+    # Test Types
+    test_types = []
+    for tt in TestType.query.all():
+        test_types.append({
+            'id': tt.id,
+            'name': tt.name,
+            'description': tt.description,
+            'standard': tt.standard,
+            'price': tt.price,
+            'cost_price': tt.cost_price,
+            'turnaround_days': tt.turnaround_days,
+            'turnaround_time': tt.turnaround_time,
+            'measurement_time': tt.measurement_time,
+            'sample_prep_time': tt.sample_prep_time,
+            'sample_prep_required': tt.sample_prep_required,
+            'sample_prep_description': tt.sample_prep_description,
+            'evaluation_time': tt.evaluation_time,
+            'sample_quantity': tt.sample_quantity,
+            'hazard_level': tt.hazard_level,
+            'device': tt.device,
+            'department_id': tt.department_id,
+            'category_id': tt.category_id
+        })
+    
+    # Departments
+    departments = []
+    for dept in Department.query.all():
+        departments.append({
+            'id': dept.id,
+            'name': dept.name,
+            'description': dept.description
+        })
+    
+    # Categories
+    categories = []
+    for cat in RequestCategory.query.all():
+        categories.append({
+            'id': cat.id,
+            'name': cat.name,
+            'color': cat.color
+        })
+    
+    # Companies
+    companies = []
+    for comp in Company.query.all():
+        companies.append({
+            'id': comp.id,
+            'name': comp.name,
+            'tax_number': comp.tax_number,
+            'address': comp.address,
+            'contact_person': comp.contact_person,
+            'contact_email': comp.contact_email,
+            'contact_phone': comp.contact_phone
+        })
+    
+    full_data = {
+        'test_types': test_types,
+        'departments': departments,
+        'categories': categories,
+        'companies': companies,
+        'exported_at': datetime.utcnow().isoformat(),
+        'version': '7.0.15'
+    }
+    
+    if format_type == 'json':
+        return jsonify(full_data)
+    
+    elif format_type == 'excel':
+        try:
+            import pandas as pd
+            from io import BytesIO
+            
+            output = BytesIO()
+            
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                if test_types:
+                    pd.DataFrame(test_types).to_excel(writer, sheet_name='Test Types', index=False)
+                if departments:
+                    pd.DataFrame(departments).to_excel(writer, sheet_name='Departments', index=False)
+                if categories:
+                    pd.DataFrame(categories).to_excel(writer, sheet_name='Categories', index=False)
+                if companies:
+                    pd.DataFrame(companies).to_excel(writer, sheet_name='Companies', index=False)
+            
+            output.seek(0)
+            response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response.headers['Content-Disposition'] = f'attachment; filename=full_database_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            return response
+        except ImportError:
+            return jsonify({'error': 'pandas és openpyxl szükséges az Excel exporthoz'}), 500
+    
+    else:
+        return jsonify({'error': 'Érvénytelen formátum. Használj: json, excel'}), 400
+
+@app.route('/api/import/test-types', methods=['POST'])
+@token_required
+@role_required('super_admin')
+def import_test_types(current_user):
+    """Import test types from JSON or CSV"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'Nincs fájl feltöltve'}), 400
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify({'error': 'Üres fájlnév'}), 400
+    
+    try:
+        # Determine file type
+        if file.filename.endswith('.json'):
+            data = json.load(file)
+            if 'test_types' in data:
+                test_types_data = data['test_types']
+            else:
+                test_types_data = data
+        
+        elif file.filename.endswith('.csv'):
+            import pandas as pd
+            df = pd.read_csv(file)
+            test_types_data = df.to_dict('records')
+        
+        elif file.filename.endswith('.xlsx') or file.filename.endswith('.xls'):
+            import pandas as pd
+            df = pd.read_excel(file, sheet_name='Test Types')
+            test_types_data = df.to_dict('records')
+        
+        else:
+            return jsonify({'error': 'Nem támogatott fájl formátum. Használj JSON, CSV vagy Excel fájlt.'}), 400
+        
+        # Import/update test types
+        created = 0
+        updated = 0
+        errors = []
+        
+        for item in test_types_data:
+            try:
+                # Check if exists (by id or name)
+                existing = None
+                if 'id' in item and item['id']:
+                    existing = TestType.query.get(item['id'])
+                
+                if not existing and 'name' in item:
+                    existing = TestType.query.filter_by(name=item['name']).first()
+                
+                if existing:
+                    # Update
+                    for key, value in item.items():
+                        if key not in ['id', 'department_name', 'category_name'] and hasattr(existing, key):
+                            # Handle NaN/None values
+                            if pd.isna(value) if 'pandas' in str(type(value)) else value is None:
+                                value = None
+                            setattr(existing, key, value)
+                    updated += 1
+                else:
+                    # Create new
+                    new_test_type = TestType(
+                        name=item.get('name'),
+                        description=item.get('description'),
+                        standard=item.get('standard'),
+                        price=item.get('price'),
+                        cost_price=item.get('cost_price'),
+                        turnaround_days=item.get('turnaround_days'),
+                        turnaround_time=item.get('turnaround_time'),
+                        measurement_time=item.get('measurement_time'),
+                        sample_prep_time=item.get('sample_prep_time'),
+                        sample_prep_required=item.get('sample_prep_required', False),
+                        sample_prep_description=item.get('sample_prep_description'),
+                        evaluation_time=item.get('evaluation_time'),
+                        sample_quantity=item.get('sample_quantity'),
+                        hazard_level=item.get('hazard_level'),
+                        device=item.get('device'),
+                        department_id=item.get('department_id'),
+                        category_id=item.get('category_id')
+                    )
+                    db.session.add(new_test_type)
+                    created += 1
+            
+            except Exception as e:
+                errors.append(f"Hiba ({item.get('name', 'unknown')}): {str(e)}")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Import sikeres!',
+            'created': created,
+            'updated': updated,
+            'errors': errors
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Import hiba: {str(e)}'}), 500
+
 # --- Lab Requests Routes ---
 def get_test_type_details(test_type_ids):
     """Return detailed test type info for a request"""
@@ -1200,8 +1477,9 @@ def delete_request(current_user, request_id):
                 print(f"Melléklet törlési hiba: {e}")
     
     # v7.0.13: Kapcsolódó adatok törlése (foreign key constraints)
+    # v7.0.15: FIX - lab_request_id a helyes mező név!
     # TestResult-ok törlése (mellékletekkel együtt)
-    test_results = TestResult.query.filter_by(request_id=request_id).all()
+    test_results = TestResult.query.filter_by(lab_request_id=request_id).all()
     for result in test_results:
         if result.attachment_filename:
             result_filepath = os.path.join(app.config['RESULT_ATTACHMENT_FOLDER'], result.attachment_filename)
@@ -1210,7 +1488,7 @@ def delete_request(current_user, request_id):
                     os.remove(result_filepath)
                 except Exception as e:
                     print(f"TestResult melléklet törlési hiba: {e}")
-    TestResult.query.filter_by(request_id=request_id).delete()
+    TestResult.query.filter_by(lab_request_id=request_id).delete()
     
     # LabRequestTestType kapcsolatok törlése
     LabRequestTestType.query.filter_by(request_id=request_id).delete()

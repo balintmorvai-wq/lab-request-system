@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { 
@@ -12,7 +12,10 @@ import {
   Beaker,
   FileText,
   Eye,
-  EyeOff
+  EyeOff,
+  Download,     // v7.0.15: Export
+  Upload,       // v7.0.15: Import
+  Database      // v7.0.15: Full DB export
 } from 'lucide-react';
 
 function TestTypeManagement() {
@@ -24,6 +27,11 @@ function TestTypeManagement() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState('');
+  
+  // v7.0.15: Export/Import state
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const fileInputRef = useRef(null);
   
   // v6.8 - Kibővített formData az összes mezővel
   const [formData, setFormData] = useState({
@@ -174,7 +182,7 @@ function TestTypeManagement() {
   };
 
   const toggleActive = async (testType) => {
-    try {
+    try:
       await axios.put(
         `${API_URL}/test-types/${testType.id}`,
         { ...testType, is_active: !testType.is_active },
@@ -183,6 +191,76 @@ function TestTypeManagement() {
       fetchData();
     } catch (error) {
       alert('Hiba történt a státusz váltás során');
+    }
+  };
+
+  // v7.0.15: Export/Import függvények
+  const handleExport = async (format, fullDatabase = false) => {
+    try {
+      const endpoint = fullDatabase ? '/export/full-database' : '/export/test-types';
+      const response = await axios.get(`${API_URL}${endpoint}?format=${format}`, {
+        headers: getAuthHeaders(),
+        responseType: format === 'json' ? 'json' : 'blob'
+      });
+
+      if (format === 'json') {
+        // JSON letöltés
+        const dataStr = JSON.stringify(response.data, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${fullDatabase ? 'full_database' : 'test_types'}_${new Date().toISOString().split('T')[0]}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        // CSV vagy Excel letöltés
+        const url = URL.createObjectURL(response.data);
+        const link = document.createElement('a');
+        link.href = url;
+        const ext = format === 'csv' ? 'csv' : 'xlsx';
+        link.download = `${fullDatabase ? 'full_database' : 'test_types'}_${new Date().toISOString().split('T')[0]}.${ext}`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      setShowExportMenu(false);
+      alert('Export sikeres!');
+    } catch (error) {
+      console.error('Export hiba:', error);
+      alert('Hiba történt az export során');
+    }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!confirm(`Biztosan importálod a(z) ${file.name} fájlt? Ez módosíthatja a meglévő adatokat!`)) {
+      event.target.value = '';
+      return;
+    }
+
+    setImportLoading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await axios.post(`${API_URL}/import/test-types`, formData, {
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      alert(`Import sikeres!\n- Létrehozva: ${response.data.created}\n- Frissítve: ${response.data.updated}\n${response.data.errors.length > 0 ? '- Hibák: ' + response.data.errors.join(', ') : ''}`);
+      fetchData();
+    } catch (error) {
+      console.error('Import hiba:', error);
+      alert('Hiba történt az import során: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setImportLoading(false);
+      event.target.value = '';
     }
   };
 
@@ -201,17 +279,93 @@ function TestTypeManagement() {
           <h1 className="text-2xl font-bold text-gray-900">Vizsgálattípusok kezelése</h1>
           <p className="text-sm text-gray-600 mt-1">Vizsgálatok, árak és paraméterek karbantartása</p>
         </div>
-        <button
-          onClick={() => {
-            setEditingId(null);
-            setFormData(resetFormData());
-            setShowModal(true);
-          }}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Új vizsgálat
-        </button>
+        
+        {/* v7.0.15: Action gombok (Export, Import, Új) */}
+        <div className="flex gap-2">
+          {/* Export dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors"
+            >
+              <Download className="w-5 h-5" />
+              Export
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 z-10">
+                <div className="p-2">
+                  <p className="text-xs font-semibold text-gray-600 uppercase px-2 py-1">Vizsgálattípusok</p>
+                  <button
+                    onClick={() => handleExport('json', false)}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                  >
+                    📄 JSON formátum
+                  </button>
+                  <button
+                    onClick={() => handleExport('csv', false)}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                  >
+                    📊 CSV formátum
+                  </button>
+                  <button
+                    onClick={() => handleExport('excel', false)}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm"
+                  >
+                    📗 Excel formátum
+                  </button>
+                  
+                  <div className="border-t border-gray-200 my-2"></div>
+                  
+                  <p className="text-xs font-semibold text-gray-600 uppercase px-2 py-1">Teljes adatbázis</p>
+                  <button
+                    onClick={() => handleExport('json', true)}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                  >
+                    <Database className="w-4 h-4" />
+                    JSON (teljes)
+                  </button>
+                  <button
+                    onClick={() => handleExport('excel', true)}
+                    className="w-full text-left px-3 py-2 hover:bg-gray-100 rounded text-sm flex items-center gap-2"
+                  >
+                    <Database className="w-4 h-4" />
+                    Excel (teljes)
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Import gomb */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importLoading}
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            <Upload className="w-5 h-5" />
+            {importLoading ? 'Import...' : 'Import'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.csv,.xlsx,.xls"
+            onChange={handleImport}
+            className="hidden"
+          />
+
+          {/* Új vizsgálat gomb */}
+          <button
+            onClick={() => {
+              setEditingId(null);
+              setFormData(resetFormData());
+              setShowModal(true);
+            }}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            Új vizsgálat
+          </button>
+        </div>
       </div>
 
       {/* v6.8 - Teljes táblázat oszlopokkal */}
