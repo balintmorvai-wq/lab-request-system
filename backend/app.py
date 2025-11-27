@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, Response
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -835,7 +835,7 @@ def export_test_types(current_user):
         if format_type == 'json':
             return jsonify({
                 'test_types': data,
-                'exported_at': datetime.utcnow().isoformat(),
+                'exported_at': datetime.datetime.utcnow().isoformat(),
                 'total_count': len(data)
             })
         
@@ -850,7 +850,7 @@ def export_test_types(current_user):
                 writer.writerows(data)
             
             response = Response(output.getvalue(), mimetype='text/csv')
-            response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
+            response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
             return response
         
         elif format_type == 'excel':
@@ -866,7 +866,7 @@ def export_test_types(current_user):
                 
                 output.seek(0)
                 response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
+                response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
                 return response
             except ImportError as e:
                 return jsonify({'error': f'pandas vagy openpyxl nincs telepítve: {str(e)}'}), 500
@@ -885,31 +885,32 @@ def export_test_types(current_user):
 @role_required('super_admin')
 def export_full_database(current_user):
     """Export teljes adatbázis (TestTypes, Departments, Categories, Companies)"""
-    format_type = request.args.get('format', 'json')
-    
-    # Test Types
-    test_types = []
-    for tt in TestType.query.all():
-        test_types.append({
-            'id': tt.id,
-            'name': tt.name,
-            'description': tt.description,
-            'standard': tt.standard,
-            'price': tt.price,
-            'cost_price': tt.cost_price,
-            'turnaround_days': tt.turnaround_days,
-            'turnaround_time': tt.turnaround_time,
-            'measurement_time': tt.measurement_time,
-            'sample_prep_time': tt.sample_prep_time,
-            'sample_prep_required': tt.sample_prep_required,
-            'sample_prep_description': tt.sample_prep_description,
-            'evaluation_time': tt.evaluation_time,
-            'sample_quantity': tt.sample_quantity,
-            'hazard_level': tt.hazard_level,
-            'device': tt.device,
-            'department_id': tt.department_id,
-            'category_id': tt.category_id
-        })
+    try:
+        format_type = request.args.get('format', 'json')
+        
+        # Test Types
+        test_types = []
+        for tt in TestType.query.all():
+            test_types.append({
+                'id': tt.id,
+                'name': tt.name,
+                'description': tt.description,
+                'standard': tt.standard,
+                'price': float(tt.price) if tt.price else None,
+                'cost_price': float(tt.cost_price) if tt.cost_price else None,
+                'turnaround_days': tt.turnaround_days,
+                'turnaround_time': tt.turnaround_time,
+                'measurement_time': tt.measurement_time,
+                'sample_prep_time': tt.sample_prep_time,
+                'sample_prep_required': tt.sample_prep_required,
+                'sample_prep_description': tt.sample_prep_description,
+                'evaluation_time': tt.evaluation_time,
+                'sample_quantity': tt.sample_quantity,
+                'hazard_level': tt.hazard_level,
+                'device': tt.device,
+                'department_id': tt.department_id,
+                'category_id': tt.category_id
+            })
     
     # Departments
     departments = []
@@ -947,8 +948,8 @@ def export_full_database(current_user):
         'departments': departments,
         'categories': categories,
         'companies': companies,
-        'exported_at': datetime.utcnow().isoformat(),
-        'version': '7.0.15'
+        'exported_at': datetime.datetime.utcnow().isoformat(),
+        'version': '7.0.17'
     }
     
     if format_type == 'json':
@@ -973,13 +974,19 @@ def export_full_database(current_user):
             
             output.seek(0)
             response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            response.headers['Content-Disposition'] = f'attachment; filename=full_database_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            response.headers['Content-Disposition'] = f'attachment; filename=full_database_{datetime.datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
             return response
-        except ImportError:
-            return jsonify({'error': 'pandas és openpyxl szükséges az Excel exporthoz'}), 500
+        except ImportError as e:
+            return jsonify({'error': f'pandas vagy openpyxl nincs telepítve: {str(e)}'}), 500
     
     else:
         return jsonify({'error': 'Érvénytelen formátum. Használj: json, excel'}), 400
+    
+    except Exception as e:
+        print(f"Full database export hiba: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Export hiba: {str(e)}'}), 500
 
 @app.route('/api/import/test-types', methods=['POST'])
 @token_required
