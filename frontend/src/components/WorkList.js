@@ -279,26 +279,33 @@ function WorkList() {
                     </div>
 
                     {/* Jobb oldal - Műveletek */}
-                    <button
-                      onClick={() => navigate(`/test-results/${request.id}`)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                        user?.role === 'super_admin' && request.status === 'validation_pending'
-                          ? 'bg-purple-600 text-white hover:bg-purple-700'
-                          : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                      }`}
-                    >
-                      {user?.role === 'super_admin' && request.status === 'validation_pending' ? (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          Validálás
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-4 h-4" />
-                          Végrehajtás
-                        </>
-                      )}
-                    </button>
+                    {request.status === 'completed' ? (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-800 rounded-lg font-medium">
+                        <CheckCircle className="w-4 h-4" />
+                        Elkészült
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => navigate(`/test-results/${request.id}`)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                          user?.role === 'super_admin' && request.status === 'validation_pending'
+                            ? 'bg-purple-600 text-white hover:bg-purple-700'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
+                      >
+                        {user?.role === 'super_admin' && request.status === 'validation_pending' ? (
+                          <>
+                            <CheckCircle className="w-4 h-4" />
+                            Validálás
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4" />
+                            Végrehajtás
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
               );

@@ -611,6 +611,14 @@ function TestResultsPanel() {
                         />
                       </div>
 
+                      {/* v7.0.4: Visszaküldés oka (ha van) */}
+                      {testResult.rejection_reason && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-sm font-medium text-red-800 mb-1">⚠️ Admin visszaküldve javításra:</p>
+                          <p className="text-sm text-red-700">{testResult.rejection_reason}</p>
+                        </div>
+                      )}
+
                       {/* Fájl feltöltés */}
                       <div className="mb-4">
                         <label className="block text-sm font-medium text-gray-700 mb-2">

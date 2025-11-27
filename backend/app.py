@@ -1305,6 +1305,7 @@ def get_test_results(current_user, request_id):
             'test_type_id': tt.id,
             'test_type_name': tt.name,
             'test_type_description': tt.description,
+            'test_type_department': tt.department.name if tt.department else None,  # v7.0.4: Add department name
             'department_id': tt.department_id,
             'department_name': tt.department.name if tt.department else None,
             'result_id': result.id if result else None,
@@ -1313,6 +1314,10 @@ def get_test_results(current_user, request_id):
             'status': result.status if result else 'pending',
             'completed_by': result.completed_by.name if result and result.completed_by else None,
             'completed_at': result.completed_at.isoformat() if result and result.completed_at else None,
+            # v7.0.4: Admin validation fields
+            'validated_by': result.validated_by.name if result and result.validated_by else None,
+            'validated_at': result.validated_at.isoformat() if result and result.validated_at else None,
+            'rejection_reason': result.rejection_reason if result else None,
             'can_edit': current_user.role == 'super_admin' or (
                 current_user.role == 'labor_staff' and tt.department_id == current_user.department_id
             )
