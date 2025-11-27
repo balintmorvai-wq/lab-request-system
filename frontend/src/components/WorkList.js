@@ -43,7 +43,7 @@ function WorkList() {
 
   const statusConfig = {
     in_progress: {
-      label: 'Folyamatban',
+      label: 'Végrehajtás alatt',
       color: 'bg-yellow-100 text-yellow-800',
       icon: Clock
     },
@@ -101,7 +101,7 @@ function WorkList() {
         <div className="bg-gradient-to-br from-slate-700 to-slate-800 p-4 rounded-lg shadow-lg border border-slate-600">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-slate-300">Folyamatban</p>
+              <p className="text-sm text-slate-300">Végrehajtás alatt</p>
               <p className="text-2xl font-bold text-yellow-400">
                 {worklist.filter(r => r.status === 'in_progress').length}
               </p>
@@ -181,64 +181,67 @@ function WorkList() {
         </div>
       </div>
 
-      {/* Munkalista - sötét design */}
-      <div className="bg-slate-800 rounded-lg shadow-xl overflow-hidden border border-slate-700">
+      {/* Munkalista - javított design v7.0.11 */}
+      <div className="bg-white rounded-lg shadow-xl overflow-hidden border border-gray-200">
         {filteredWorklist.length === 0 ? (
-          <div className="px-6 py-12 text-center text-slate-400">
-            <Clipboard className="w-12 h-12 mx-auto mb-4 text-slate-500" />
+          <div className="px-6 py-12 text-center text-gray-500">
+            <Clipboard className="w-12 h-12 mx-auto mb-4 text-gray-400" />
             <p>Nincs megjeleníthető kérés</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-700">
+          <div className="divide-y divide-gray-200">
             {filteredWorklist.map((request) => {
               const StatusIcon = statusConfig[request.status]?.icon || Clock;
               
               return (
-                <div key={request.id} className="p-4 hover:bg-slate-750 transition-colors bg-slate-800">
+                <div 
+                  key={request.id} 
+                  className="p-5 hover:bg-gray-50 transition-colors bg-white border-l-4 border-l-transparent hover:border-l-indigo-500"
+                >
                   <div className="flex items-start justify-between gap-4">
                     {/* Bal oldal - Kérés infó */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-white">
+                        <h3 className="font-semibold text-gray-900 text-lg">
                           {request.request_number}
                         </h3>
-                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusConfig[request.status]?.color}`}>
+                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${statusConfig[request.status]?.color}`}>
                           {statusConfig[request.status]?.label}
                         </span>
                         {request.urgency !== 'normal' && (
-                          <span className={`text-sm font-medium ${urgencyConfig[request.urgency].color}`}>
+                          <span className={`text-sm font-semibold ${urgencyConfig[request.urgency].color}`}>
                             {urgencyConfig[request.urgency].label}
                           </span>
                         )}
                       </div>
 
-                      <p className="text-sm text-slate-300 mb-2">
+                      <p className="text-sm text-gray-700 mb-3 font-medium">
                         {request.sample_description || request.internal_id}
                       </p>
 
-                      <div className="flex items-center gap-4 text-xs text-slate-400">
+                      <div className="flex items-center gap-4 text-xs text-gray-600">
                         <span className="flex items-center gap-1">
-                          <Calendar className="w-3.5 h-3.5" />
+                          <Calendar className="w-4 h-4" />
                           {new Date(request.created_at).toLocaleDateString('hu-HU')}
                         </span>
                         {request.deadline && (
-                          <span className="flex items-center gap-1 text-orange-400">
-                            <Clock className="w-3.5 h-3.5" />
+                          <span className="flex items-center gap-1 text-orange-600 font-medium">
+                            <Clock className="w-4 h-4" />
                             Határidő: {new Date(request.deadline).toLocaleDateString('hu-HU')}
                           </span>
                         )}
-                        <span>{request.company_name}</span>
+                        <span className="font-medium">{request.company_name}</span>
                       </div>
 
-                      {/* v7.0.1: Test list */}
+                      {/* v7.0.1: Test list - javított design */}
                       {request.test_list && request.test_list.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-100">
-                          <div className="text-xs font-medium text-gray-700 mb-2">Vizsgálatok:</div>
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="text-xs font-semibold text-gray-700 mb-2">Vizsgálatok:</div>
                           <div className="flex flex-wrap gap-2">
                             {request.test_list.map((test) => (
                               <div 
                                 key={test.id}
-                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs ${
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium ${
                                   test.status === 'completed' 
                                     ? 'bg-green-50 text-green-700 border border-green-200' 
                                     : test.status === 'in_progress'
@@ -246,11 +249,11 @@ function WorkList() {
                                     : 'bg-gray-50 text-gray-600 border border-gray-200'
                                 }`}
                               >
-                                <span className="font-medium">{test.name}</span>
+                                <span className="font-semibold">{test.name}</span>
                                 {test.department_name && user?.role === 'super_admin' && (
                                   <span className="text-gray-500">({test.department_name})</span>
                                 )}
-                                {test.status === 'completed' && <CheckCircle className="w-3 h-3" />}
+                                {test.status === 'completed' && <CheckCircle className="w-3.5 h-3.5" />}
                               </div>
                             ))}
                           </div>
@@ -258,24 +261,24 @@ function WorkList() {
                       )}
                     </div>
 
-                    {/* Közép -Progress */}
+                    {/* Közép - Progress */}
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-bold text-gray-900">
                           {request.my_completed_count} / {request.my_test_count}
                         </div>
-                        <div className="text-xs text-gray-500">vizsgálat</div>
+                        <div className="text-xs text-gray-600 font-medium">vizsgálat</div>
                       </div>
                       <div className="w-24">
-                        <div className="bg-gray-200 rounded-full h-2">
+                        <div className="bg-gray-200 rounded-full h-2.5">
                           <div
-                            className={`h-2 rounded-full transition-all ${
+                            className={`h-2.5 rounded-full transition-all ${
                               request.progress === 100 ? 'bg-green-500' : 'bg-indigo-600'
                             }`}
                             style={{ width: `${request.progress}%` }}
                           />
                         </div>
-                        <div className="text-xs text-center text-gray-600 mt-1">
+                        <div className="text-xs text-center text-gray-700 font-semibold mt-1">
                           {request.progress}%
                         </div>
                       </div>

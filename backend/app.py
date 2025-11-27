@@ -1451,17 +1451,41 @@ def upload_result_attachment(current_user, result_id):
 def download_result_attachment(current_user, result_id):
     """
     Vizsgálati eredmény fájl letöltése
+    v7.0.10: Debug logging hozzáadva
     """
+    print(f"[ATTACHMENT DOWNLOAD] Kezdés - result_id={result_id}, user_id={current_user.id}")
+    
     result = TestResult.query.get_or_404(result_id)
+    print(f"[ATTACHMENT DOWNLOAD] TestResult megtalálva - attachment_filename={result.attachment_filename}")
     
     if not result.attachment_filename:
+        print(f"[ATTACHMENT DOWNLOAD] ERROR: Nincs attachment_filename!")
         return jsonify({'message': 'Nincs melléklet!'}), 404
     
     filepath = os.path.join(app.config['RESULT_ATTACHMENT_FOLDER'], result.attachment_filename)
+    print(f"[ATTACHMENT DOWNLOAD] File path: {filepath}")
+    print(f"[ATTACHMENT DOWNLOAD] RESULT_ATTACHMENT_FOLDER: {app.config['RESULT_ATTACHMENT_FOLDER']}")
+    print(f"[ATTACHMENT DOWNLOAD] File exists: {os.path.exists(filepath)}")
+    
+    # v7.0.10: Mappa tartalom listázása debug-hoz
+    if os.path.exists(app.config['RESULT_ATTACHMENT_FOLDER']):
+        files_in_folder = os.listdir(app.config['RESULT_ATTACHMENT_FOLDER'])
+        print(f"[ATTACHMENT DOWNLOAD] Files in result folder: {files_in_folder}")
+    else:
+        print(f"[ATTACHMENT DOWNLOAD] ERROR: Result attachment folder NOT EXISTS!")
     
     if not os.path.exists(filepath):
-        return jsonify({'message': 'Fájl nem található!'}), 404
+        print(f"[ATTACHMENT DOWNLOAD] ERROR: File not found at {filepath}")
+        return jsonify({
+            'message': 'Fájl nem található!',
+            'debug_info': {
+                'filename': result.attachment_filename,
+                'expected_path': filepath,
+                'folder_exists': os.path.exists(app.config['RESULT_ATTACHMENT_FOLDER'])
+            }
+        }), 404
     
+    print(f"[ATTACHMENT DOWNLOAD] Sikeres letöltés: {result.attachment_filename}")
     return send_file(filepath, as_attachment=True, download_name=result.attachment_filename)
 
 @app.route('/api/requests/<int:request_id>/submit-validation', methods=['POST'])

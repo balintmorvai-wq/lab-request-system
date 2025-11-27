@@ -211,7 +211,7 @@ function RequestList() {
       icon: FileText 
     },
     in_progress: { 
-      label: 'Folyamatban', 
+      label: 'Végrehajtás alatt', 
       color: 'bg-yellow-100 text-yellow-800',
       icon: Clock 
     },
@@ -299,7 +299,7 @@ function RequestList() {
               <option value="pending_approval">Céges jóváhagyásra vár</option>
               <option value="rejected">Cég által elutasítva</option>
               <option value="submitted">Beküldve</option>
-              <option value="in_progress">Folyamatban</option>
+              <option value="in_progress">Végrehajtás alatt</option>
               <option value="completed">Elkészült</option>
             </select>
           </div>
