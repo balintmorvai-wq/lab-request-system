@@ -472,7 +472,12 @@ function RequestList() {
                           </button>
                           
                           {selectedRequestId === request.id && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                            <div className={`absolute right-0 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 ${
+                              // v7.0.11: Utolsó 2 sornál felfelé nyílik
+                              filteredRequests.indexOf(request) >= filteredRequests.length - 2
+                                ? 'bottom-full mb-2'
+                                : 'top-full mt-2'
+                            }`}>
                               {Object.entries(statusConfig).map(([status, config]) => (
                                 <button
                                   key={status}
