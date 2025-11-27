@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';  // v7.0.6: useNavigate
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import RequestDetailsModal from './RequestDetailsModal';
@@ -17,12 +17,14 @@ import {
   Edit2,
   Send,
   XCircle,
-  Trash2
+  Trash2,
+  Eye  // v7.0.6: Eredmények megtekintése ikon
 } from 'lucide-react';
 
 function RequestList() {
   const { user, getAuthHeaders, API_URL } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();  // v7.0.6: Eredmények megtekintése navigáció
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -400,6 +402,17 @@ function RequestList() {
                       >
                         <Download className="w-5 h-5" />
                       </button>
+
+                      {/* v7.0.6: Eredmények megtekintése gomb - csak completed kéréseknél */}
+                      {request.status === 'completed' && (
+                        <button
+                          onClick={() => navigate(`/test-results/${request.id}`)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Eredmények megtekintése"
+                        >
+                          <Eye className="w-5 h-5" />
+                        </button>
+                      )}
 
                       {/* Approval Buttons (Company Admin only) */}
                       {canApprove && isPendingApproval && (

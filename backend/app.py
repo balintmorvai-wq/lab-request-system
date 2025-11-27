@@ -1580,6 +1580,23 @@ def complete_request_validation(current_user, request_id):
         f'A laborkérés elkészült: {req.request_number}'
     )
     
+    # v7.0.6: Értesítés a cég adminjának is
+    requester = User.query.get(req.user_id)
+    if requester and requester.company_id:
+        # Keressük meg a cég adminját
+        company_admin = User.query.filter_by(
+            company_id=requester.company_id,
+            role='company_admin'
+        ).first()
+        
+        if company_admin and company_admin.id != req.user_id:
+            create_notification(
+                company_admin.id,
+                req.id,
+                'completed',
+                f'Laborkérés elkészült: {req.request_number} ({requester.name})'
+            )
+    
     return jsonify({
         'message': 'Kérés sikeresen lezárva!',
         'request': {
