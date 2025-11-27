@@ -798,76 +798,83 @@ def delete_test_type(current_user, test_type_id):
 @role_required('super_admin')
 def export_test_types(current_user):
     """Export test types in multiple formats: JSON, CSV, Excel"""
-    format_type = request.args.get('format', 'json')  # json, csv, excel
-    
-    test_types = TestType.query.all()
-    
-    data = []
-    for tt in test_types:
-        data.append({
-            'id': tt.id,
-            'name': tt.name,
-            'description': tt.description,
-            'standard': tt.standard,
-            'price': tt.price,
-            'cost_price': tt.cost_price,
-            'turnaround_days': tt.turnaround_days,
-            'turnaround_time': tt.turnaround_time,
-            'measurement_time': tt.measurement_time,
-            'sample_prep_time': tt.sample_prep_time,
-            'sample_prep_required': tt.sample_prep_required,
-            'sample_prep_description': tt.sample_prep_description,
-            'evaluation_time': tt.evaluation_time,
-            'sample_quantity': tt.sample_quantity,
-            'hazard_level': tt.hazard_level,
-            'device': tt.device,
-            'department_id': tt.department_id,
-            'department_name': tt.department.name if tt.department else None,
-            'category_id': tt.category_id,
-            'category_name': tt.category.name if tt.category else None
-        })
-    
-    if format_type == 'json':
-        return jsonify({
-            'test_types': data,
-            'exported_at': datetime.utcnow().isoformat(),
-            'total_count': len(data)
-        })
-    
-    elif format_type == 'csv':
-        import csv
-        from io import StringIO
+    try:
+        format_type = request.args.get('format', 'json')  # json, csv, excel
         
-        output = StringIO()
-        if len(data) > 0:
-            writer = csv.DictWriter(output, fieldnames=data[0].keys())
-            writer.writeheader()
-            writer.writerows(data)
+        test_types = TestType.query.all()
         
-        response = Response(output.getvalue(), mimetype='text/csv')
-        response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
-        return response
-    
-    elif format_type == 'excel':
-        try:
-            import pandas as pd
-            from io import BytesIO
+        data = []
+        for tt in test_types:
+            data.append({
+                'id': tt.id,
+                'name': tt.name,
+                'description': tt.description,
+                'standard': tt.standard,
+                'price': float(tt.price) if tt.price else None,
+                'cost_price': float(tt.cost_price) if tt.cost_price else None,
+                'turnaround_days': tt.turnaround_days,
+                'turnaround_time': tt.turnaround_time,
+                'measurement_time': tt.measurement_time,
+                'sample_prep_time': tt.sample_prep_time,
+                'sample_prep_required': tt.sample_prep_required,
+                'sample_prep_description': tt.sample_prep_description,
+                'evaluation_time': tt.evaluation_time,
+                'sample_quantity': tt.sample_quantity,
+                'hazard_level': tt.hazard_level,
+                'device': tt.device,
+                'department_id': tt.department_id,
+                'department_name': tt.department.name if tt.department else None,
+                'category_id': tt.category_id,
+                'category_name': tt.category.name if tt.category else None
+            })
+        
+        if format_type == 'json':
+            return jsonify({
+                'test_types': data,
+                'exported_at': datetime.utcnow().isoformat(),
+                'total_count': len(data)
+            })
+        
+        elif format_type == 'csv':
+            import csv
+            from io import StringIO
             
-            df = pd.DataFrame(data)
-            output = BytesIO()
+            output = StringIO()
+            if len(data) > 0:
+                writer = csv.DictWriter(output, fieldnames=data[0].keys())
+                writer.writeheader()
+                writer.writerows(data)
             
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df.to_excel(writer, sheet_name='Test Types', index=False)
-            
-            output.seek(0)
-            response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
+            response = Response(output.getvalue(), mimetype='text/csv')
+            response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
             return response
-        except ImportError:
-            return jsonify({'error': 'pandas és openpyxl szükséges az Excel exporthoz'}), 500
+        
+        elif format_type == 'excel':
+            try:
+                import pandas as pd
+                from io import BytesIO
+                
+                df = pd.DataFrame(data)
+                output = BytesIO()
+                
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df.to_excel(writer, sheet_name='Test Types', index=False)
+                
+                output.seek(0)
+                response = Response(output.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                response.headers['Content-Disposition'] = f'attachment; filename=test_types_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.xlsx'
+                return response
+            except ImportError as e:
+                return jsonify({'error': f'pandas vagy openpyxl nincs telepítve: {str(e)}'}), 500
+        
+        else:
+            return jsonify({'error': 'Érvénytelen formátum. Használj: json, csv, excel'}), 400
     
-    else:
-        return jsonify({'error': 'Érvénytelen formátum. Használj: json, csv, excel'}), 400
+    except Exception as e:
+        print(f"Export hiba: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Export hiba: {str(e)}'}), 500
 
 @app.route('/api/export/full-database', methods=['GET'])
 @token_required
@@ -1490,8 +1497,8 @@ def delete_request(current_user, request_id):
                     print(f"TestResult melléklet törlési hiba: {e}")
     TestResult.query.filter_by(lab_request_id=request_id).delete()
     
-    # LabRequestTestType kapcsolatok törlése
-    LabRequestTestType.query.filter_by(request_id=request_id).delete()
+    # v7.0.16: LabRequestTestType törölve - ez a tábla már nem létezik
+    # A vizsgálat típusok JSON-ban vannak tárolva (test_types mező)
     
     # Notification-ok törlése
     Notification.query.filter_by(request_id=request_id).delete()

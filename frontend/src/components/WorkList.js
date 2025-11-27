@@ -166,41 +166,9 @@ function WorkList() {
           </p>
         </div>
 
-        {/* v7.0.15: ELSŐ SZINT - Department szűrő (super_admin-nak LEGFELÜL) */}
-        {user?.role === 'super_admin' && departments.length > 0 && (
-          <div className="px-6 pt-6 pb-4 bg-gradient-to-b from-indigo-50 to-gray-50 border-b-2 border-indigo-200">
-            <p className="text-sm font-bold text-gray-800 mb-3">🔍 Szervezeti egység szűrés:</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setDepartmentFilter('all')}
-                className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                  departmentFilter === 'all'
-                    ? 'bg-indigo-600 text-white shadow-lg scale-105'
-                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-400 hover:shadow-md'
-                }`}
-              >
-                ✨ Összes szervezet
-              </button>
-              {departments.map((dept) => (
-                <button
-                  key={dept.id}
-                  onClick={() => setDepartmentFilter(dept.name)}
-                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                    departmentFilter === dept.name
-                      ? 'bg-indigo-600 text-white shadow-lg scale-105'
-                      : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-400 hover:shadow-md'
-                  }`}
-                >
-                  {dept.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Statisztikák Grid + Kereső */}
+        {/* v7.0.16: Statisztikák Grid + Kereső */}
         <div className="p-6 bg-gray-50">
-          {/* Statisztikák (kérések száma, department szerinti szűréssel) */}
+          {/* v7.0.16: Statisztika kártyák LEGFELÜL */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             {/* Összes */}
             <button
@@ -281,6 +249,38 @@ function WorkList() {
               </div>
             </button>
           </div>
+
+          {/* v7.0.16: Department szűrő KÁRTYÁK UTÁN */}
+          {user?.role === 'super_admin' && departments.length > 0 && (
+            <div className="mt-4 pt-4 border-t-2 border-indigo-200 bg-gradient-to-b from-indigo-50 to-transparent rounded-lg p-4">
+              <p className="text-sm font-bold text-gray-800 mb-3">🔍 Szervezeti egység szűrés:</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setDepartmentFilter('all')}
+                  className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    departmentFilter === 'all'
+                      ? 'bg-indigo-600 text-white shadow-lg scale-105'
+                      : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-400 hover:shadow-md'
+                  }`}
+                >
+                  ✨ Összes szervezet
+                </button>
+                {departments.map((dept) => (
+                  <button
+                    key={dept.id}
+                    onClick={() => setDepartmentFilter(dept.name)}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      departmentFilter === dept.name
+                        ? 'bg-indigo-600 text-white shadow-lg scale-105'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-400 hover:shadow-md'
+                    }`}
+                  >
+                    {dept.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Kereső + Szűrők */}
           <div className="flex flex-col md:flex-row gap-3">

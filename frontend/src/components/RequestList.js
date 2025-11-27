@@ -300,7 +300,7 @@ function RequestList() {
               <option value="draft">Piszkozat (szerkeszthető)</option>
               <option value="pending_approval">Céges jóváhagyásra vár</option>
               <option value="rejected">Cég által elutasítva</option>
-              <option value="submitted">Beküldve</option>
+              <option value="submitted">Szolgáltatóhoz beküldve</option>
               <option value="in_progress">Végrehajtás alatt</option>
               <option value="completed">Elkészült</option>
             </select>
