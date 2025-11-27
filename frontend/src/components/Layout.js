@@ -179,10 +179,28 @@ function Layout() {
           </div>
 
           <div className="px-6 py-3 border-b border-gray-200">
-            <div className="text-sm font-medium text-gray-900">{user?.name}</div>
-            <div className="text-xs text-gray-500">{roleNames[user?.role]}</div>
+            {/* v7.0.17: Cég logó + név */}
+            <div className="flex items-center gap-3 mb-2">
+              {user?.company_logo && user?.company_id && (
+                <img 
+                  src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/companies/${user.company_id}/logo`}
+                  alt="Cég logó"
+                  className="w-10 h-10 rounded-full object-cover border-2 border-indigo-200"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              )}
+              <div className="flex-1">
+                <div className="text-sm font-medium text-gray-900">{user?.name}</div>
+                <div className="text-xs text-gray-500">{roleNames[user?.role]}</div>
+              </div>
+            </div>
+            {/* Company név (ha van) */}
+            {user?.company_name && (
+              <div className="text-xs text-blue-600 font-medium">🏢 {user.company_name}</div>
+            )}
+            {/* Department (labor staff-nál) */}
             {user?.role === 'labor_staff' && user?.department_name && (
-              <div className="text-xs text-indigo-600 mt-1">🏢 {user.department_name}</div>
+              <div className="text-xs text-indigo-600 mt-1">🔬 {user.department_name}</div>
             )}
           </div>
 

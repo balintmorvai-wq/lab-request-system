@@ -33,6 +33,16 @@ function TestTypeManagement() {
   const [importLoading, setImportLoading] = useState(false);
   const fileInputRef = useRef(null);
   
+  // v7.0.17: Táblázat szűrők
+  const [filters, setFilters] = useState({
+    name: '',
+    description: '',
+    department: '',
+    category: '',
+    price: '',
+    turnaround_days: ''
+  });
+  
   // v6.8 - Kibővített formData az összes mezővel
   const [formData, setFormData] = useState({
     name: '',
@@ -272,6 +282,41 @@ function TestTypeManagement() {
     );
   }
 
+  // v7.0.17: Szűrési logika
+  const filteredTestTypes = testTypes.filter(testType => {
+    // Név szűrő
+    if (filters.name && !testType.name.toLowerCase().includes(filters.name.toLowerCase())) {
+      return false;
+    }
+    
+    // Leírás szűrő
+    if (filters.description && testType.description && !testType.description.toLowerCase().includes(filters.description.toLowerCase())) {
+      return false;
+    }
+    
+    // Department szűrő
+    if (filters.department && testType.department_name && !testType.department_name.toLowerCase().includes(filters.department.toLowerCase())) {
+      return false;
+    }
+    
+    // Category szűrő
+    if (filters.category && testType.category_name && !testType.category_name.toLowerCase().includes(filters.category.toLowerCase())) {
+      return false;
+    }
+    
+    // Ár szűrő
+    if (filters.price && testType.price && !testType.price.toString().includes(filters.price)) {
+      return false;
+    }
+    
+    // Átfutási idő szűrő
+    if (filters.turnaround_days && testType.turnaround_days && !testType.turnaround_days.toString().includes(filters.turnaround_days)) {
+      return false;
+    }
+    
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -373,27 +418,87 @@ function TestTypeManagement() {
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
+              {/* v7.0.17: Fejléc címkék */}
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Név</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Leírás</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Szervezeti egység</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kategória</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ár (Ft)</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Átfutási idő (nap)</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Aktív</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Műveletek</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Név</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Leírás</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Szervezeti egység</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Kategória</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ár (Ft)</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Átfutási idő (nap)</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Aktív</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Műveletek</th>
+              </tr>
+              {/* v7.0.17: Szűrő inputok */}
+              <tr className="bg-white">
+                <th className="px-4 py-2">
+                  <input
+                    type="text"
+                    placeholder="Szűrés név..."
+                    value={filters.name}
+                    onChange={(e) => setFilters({...filters, name: e.target.value})}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </th>
+                <th className="px-4 py-2">
+                  <input
+                    type="text"
+                    placeholder="Szűrés leírás..."
+                    value={filters.description}
+                    onChange={(e) => setFilters({...filters, description: e.target.value})}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </th>
+                <th className="px-4 py-2">
+                  <input
+                    type="text"
+                    placeholder="Szűrés dept..."
+                    value={filters.department}
+                    onChange={(e) => setFilters({...filters, department: e.target.value})}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </th>
+                <th className="px-4 py-2">
+                  <input
+                    type="text"
+                    placeholder="Szűrés kateg..."
+                    value={filters.category}
+                    onChange={(e) => setFilters({...filters, category: e.target.value})}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </th>
+                <th className="px-4 py-2">
+                  <input
+                    type="text"
+                    placeholder="Szűrés ár..."
+                    value={filters.price}
+                    onChange={(e) => setFilters({...filters, price: e.target.value})}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </th>
+                <th className="px-4 py-2">
+                  <input
+                    type="text"
+                    placeholder="Szűrés nap..."
+                    value={filters.turnaround_days}
+                    onChange={(e) => setFilters({...filters, turnaround_days: e.target.value})}
+                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                  />
+                </th>
+                <th className="px-4 py-2"></th>
+                <th className="px-4 py-2"></th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {testTypes.length === 0 ? (
+              {filteredTestTypes.length === 0 ? (
                 <tr>
                   <td colSpan="8" className="px-6 py-12 text-center text-gray-500">
                     <TestTube className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                    <p>Még nincsenek vizsgálattípusok</p>
+                    <p>{testTypes.length === 0 ? 'Még nincsenek vizsgálattípusok' : 'Nincs találat a szűrésre'}</p>
                   </td>
                 </tr>
               ) : (
-                testTypes.map((testType) => (
+                filteredTestTypes.map((testType) => (
                   <tr key={testType.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3">
                       <div className="text-sm font-medium text-gray-900">{testType.name}</div>

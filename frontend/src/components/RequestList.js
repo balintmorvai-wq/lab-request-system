@@ -471,7 +471,7 @@ function RequestList() {
                         </button>
                       )}
 
-                      {/* Státusz váltás - v7.0.13: Csak super_admin */}
+                      {/* v7.0.17: Státusz váltás - Mindig lefele nyíló dropdown, magasabb z-index */}
                       {canEditStatus && (
                         <div className="relative">
                           <button
@@ -482,23 +482,27 @@ function RequestList() {
                           </button>
                           
                           {selectedRequestId === request.id && (
-                            <div className={`absolute right-0 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 ${
-                              filteredRequests.indexOf(request) >= filteredRequests.length - 2
-                                ? 'bottom-full mb-2'
-                                : 'top-full mt-2'
-                            }`}>
-                              {Object.entries(statusConfig).map(([status, config]) => (
-                                <button
-                                  key={status}
-                                  onClick={() => updateStatus(request.id, status)}
-                                  className="w-full text-left px-4 py-2 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg transition-colors"
-                                >
-                                  <span className={`inline-block px-2 py-1 text-xs rounded-full ${config.color}`}>
-                                    {config.label}
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
+                            <>
+                              {/* v7.0.17: Backdrop - kattintásra bezáródik */}
+                              <div 
+                                className="fixed inset-0 z-40" 
+                                onClick={() => setSelectedRequestId(null)}
+                              />
+                              {/* v7.0.17: Dropdown - mindig látható, fixen lefele */}
+                              <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50">
+                                {Object.entries(statusConfig).map(([status, config]) => (
+                                  <button
+                                    key={status}
+                                    onClick={() => updateStatus(request.id, status)}
+                                    className="w-full text-left px-4 py-2 hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg transition-colors"
+                                  >
+                                    <span className={`inline-block px-2 py-1 text-xs rounded-full ${config.color}`}>
+                                      {config.label}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            </>
                           )}
                         </div>
                       )}

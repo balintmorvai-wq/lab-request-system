@@ -369,6 +369,8 @@ def login():
             'name': user.name,
             'role': user.role,
             'company_id': user.company_id,
+            'company_name': user.company.name if user.company else None,  # v7.0.17
+            'company_logo': user.company.logo_filename if user.company else None,  # v7.0.17
             'department_id': user.department_id,  # v7.0.1: Add department_id
             'department_name': user.department.name if user.department else None  # v7.0.1: Add department_name
         }
@@ -383,6 +385,8 @@ def get_current_user(current_user):
         'name': current_user.name,
         'role': current_user.role,
         'company_id': current_user.company_id,
+        'company_name': current_user.company.name if current_user.company else None,  # v7.0.17
+        'company_logo': current_user.company.logo_filename if current_user.company else None,  # v7.0.17
         'department_id': current_user.department_id,  # v7.0.1: Add department_id
         'department_name': current_user.department.name if current_user.department else None,  # v7.0.1: Add department_name
         'phone': current_user.phone
