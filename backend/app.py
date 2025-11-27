@@ -1627,7 +1627,12 @@ def download_attachment(current_user, request_id):
 def export_request_pdf(current_user, request_id):
     req = LabRequest.query.get_or_404(request_id)
     
+    # v7.0.8: Jogosultság ellenőrzés céges userekre
     if current_user.role == 'company_user' and req.user_id != current_user.id:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    # v7.0.8: Company admin csak saját cégének kéréseit láthatja
+    if current_user.role == 'company_admin' and req.company_id != current_user.company_id:
         return jsonify({'message': 'Nincs jogosultságod!'}), 403
     
     # v6.7 - Improved UTF-8 font registration for Hungarian characters

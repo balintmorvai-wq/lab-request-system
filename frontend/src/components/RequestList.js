@@ -13,6 +13,7 @@ import {
   FileText,
   Info,
   Download,
+  FileCheck,  // v7.0.8: Completed kérések PDF ikonja
   Edit,
   Edit2,
   Send,
@@ -78,6 +79,7 @@ function RequestList() {
 
   const downloadPDF = async (requestId, sampleId) => {
     try {
+      console.log('[PDF Download] Letöltés indul...', { requestId, sampleId, userRole: user?.role });
       const response = await axios.get(
         `${API_URL}/requests/${requestId}/pdf`,
         {
@@ -85,6 +87,8 @@ function RequestList() {
           responseType: 'blob'
         }
       );
+      
+      console.log('[PDF Download] Válasz érkezett:', response.status, response.headers['content-type']);
       
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
@@ -94,9 +98,13 @@ function RequestList() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      
+      console.log('[PDF Download] Letöltés sikeres!');
     } catch (error) {
-      console.error('PDF letöltési hiba:', error);
-      alert('Hiba történt a PDF letöltése során');
+      console.error('[PDF Download] Hiba:', error);
+      console.error('[PDF Download] Response:', error.response?.data);
+      console.error('[PDF Download] Status:', error.response?.status);
+      alert(`Hiba történt a PDF letöltése során: ${error.response?.status === 403 ? 'Nincs jogosultságod!' : 'Ismeretlen hiba'}`);
     }
   };
 
@@ -394,13 +402,21 @@ function RequestList() {
                         <Info className="w-5 h-5" />
                       </button>
 
-                      {/* PDF Button */}
+                      {/* PDF Button - v7.0.8: eltérő megjelenés completed kérésnél */}
                       <button
                         onClick={() => downloadPDF(request.id, request.sample_id)}
-                        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="PDF letöltés"
+                        className={`p-2 rounded-lg transition-colors ${
+                          request.status === 'completed' 
+                            ? 'text-emerald-600 hover:bg-emerald-50'  // Completed: sötétzöld FileCheck
+                            : 'text-green-600 hover:bg-green-50'      // Egyéb: zöld Download
+                        }`}
+                        title={request.status === 'completed' ? 'Eredményekkel bővített PDF letöltése' : 'PDF letöltés'}
                       >
-                        <Download className="w-5 h-5" />
+                        {request.status === 'completed' ? (
+                          <FileCheck className="w-5 h-5" />  // Completed: checkmark a file-on
+                        ) : (
+                          <Download className="w-5 h-5" />   // Egyéb: sima download
+                        )}
                       </button>
 
                       {/* v7.0.7: Eredmények megtekintése gomb - csak labor_staff/super_admin-nak */}
