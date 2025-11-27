@@ -56,7 +56,13 @@ os.makedirs(app.config['RESULT_ATTACHMENT_FOLDER'], exist_ok=True)  # v7.0
 
 # v6.6 Production: CORS with frontend domain
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
-CORS(app, origins=[FRONTEND_URL, 'http://localhost:3000'])
+# v7.0.18: CORS fix - supports_credentials és resources
+CORS(app, 
+     resources={r"/api/*": {"origins": [FRONTEND_URL, 'http://localhost:3000', 'https://labsquare.netlify.app']}},
+     supports_credentials=True,
+     allow_headers=['Content-Type', 'Authorization'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+)
 
 # Lazy database initialization
 db = SQLAlchemy()
