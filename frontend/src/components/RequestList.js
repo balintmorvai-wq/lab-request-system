@@ -202,13 +202,8 @@ function RequestList() {
       color: 'bg-orange-100 text-orange-800',
       icon: Clock 
     },
-    rejected: {
-      label: 'Cég által elutasítva',
-      color: 'bg-red-100 text-red-800',
-      icon: XCircle
-    },
     submitted: { 
-      label: 'Beküldve', 
+      label: 'Szolgáltatóhoz beküldve', 
       color: 'bg-blue-100 text-blue-800',
       icon: FileText 
     },
@@ -217,7 +212,7 @@ function RequestList() {
       color: 'bg-yellow-100 text-yellow-800',
       icon: Clock 
     },
-    validation_pending: {  // v7.0.2 FINAL: Add missing status
+    validation_pending: {
       label: 'Validálásra vár',
       color: 'bg-purple-100 text-purple-800',
       icon: AlertCircle
@@ -299,9 +294,9 @@ function RequestList() {
               <option value="all">Összes státusz</option>
               <option value="draft">Piszkozat (szerkeszthető)</option>
               <option value="pending_approval">Céges jóváhagyásra vár</option>
-              <option value="rejected">Cég által elutasítva</option>
               <option value="submitted">Szolgáltatóhoz beküldve</option>
               <option value="in_progress">Végrehajtás alatt</option>
+              <option value="validation_pending">Validálásra vár</option>
               <option value="completed">Elkészült</option>
             </select>
           </div>
@@ -392,8 +387,8 @@ function RequestList() {
 
                     {/* Jobb oldal - Gombok */}
                     <div className="flex gap-1.5 items-start">
-                      {/* Edit Button for DRAFT and REJECTED */}
-                      {(request.status === 'draft' || request.status === 'rejected') && user?.role === 'company_user' && (
+                      {/* Edit Button for DRAFT only */}
+                      {request.status === 'draft' && user?.role === 'company_user' && (
                         <Link
                           to={`/requests/edit/${request.id}`}
                           className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

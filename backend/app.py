@@ -1233,14 +1233,6 @@ def update_request(current_user, request_id):
     
     old_status = req.status
     
-    # v6.6: If status is rejected and user is editing, keep it rejected
-    # This prevents rejected requests from going back to pending_approval
-    if old_status == 'rejected' and current_user.role == 'company_user':
-        # User can edit rejected requests, but status stays rejected
-        # Admin can still change status from rejected to other states
-        if 'status' not in data or data.get('status') == 'pending_approval':
-            data['status'] = 'rejected'  # Force stay in rejected
-    
     # Update fields
     if 'status' in data:
         req.status = data['status']
