@@ -403,8 +403,8 @@ function RequestList() {
                         <Download className="w-5 h-5" />
                       </button>
 
-                      {/* v7.0.6: Eredmények megtekintése gomb - csak completed kéréseknél */}
-                      {request.status === 'completed' && (
+                      {/* v7.0.7: Eredmények megtekintése gomb - csak labor_staff/super_admin-nak */}
+                      {request.status === 'completed' && (user?.role === 'labor_staff' || user?.role === 'super_admin') && (
                         <button
                           onClick={() => navigate(`/test-results/${request.id}`)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"

@@ -1761,8 +1761,84 @@ def export_request_pdf(current_user, request_id):
     
     if req.special_instructions:
         elements.append(Spacer(1, 0.5*cm))
-        elements.append(Paragraph('<b>Különleges kezelési utasítások:</b>', styles['Heading2']))
-        elements.append(Paragraph(req.special_instructions, styles['Normal']))
+        elements.append(Paragraph('<b>Különleges kezelési utasítások:</b>', heading_style))
+        instruction_style = ParagraphStyle('Instruction', parent=styles['Normal'], fontName=default_font)
+        elements.append(Paragraph(req.special_instructions, instruction_style))
+    
+    # v7.0.7: Eredmények szekció - csak completed kéréseknél
+    if req.status == 'completed':
+        elements.append(PageBreak())  # Új oldal az eredményeknek
+        
+        # Eredmények header
+        results_title_style = ParagraphStyle(
+            'ResultsTitle',
+            parent=styles['Heading1'],
+            fontSize=20,
+            textColor=colors.HexColor('#059669'),  # Zöld
+            spaceAfter=20,
+            alignment=TA_CENTER,
+            fontName=bold_font
+        )
+        elements.append(Paragraph('VIZSGÁLATI EREDMÉNYEK', results_title_style))
+        elements.append(Spacer(1, 0.5*cm))
+        
+        # TestResult-ok lekérdezése
+        test_results = TestResult.query.filter_by(lab_request_id=request_id).all()
+        
+        if test_results:
+            for idx, result in enumerate(test_results, 1):
+                # Vizsgálat neve
+                test_name_style = ParagraphStyle(
+                    'TestName',
+                    parent=styles['Heading2'],
+                    fontSize=14,
+                    textColor=colors.HexColor('#4F46E5'),
+                    spaceAfter=10,
+                    fontName=bold_font
+                )
+                test_type_name = result.test_type.name if result.test_type else f"Vizsgálat #{result.test_type_id}"
+                elements.append(Paragraph(f'{idx}. {test_type_name}', test_name_style))
+                
+                # Eredmény adatok táblázat
+                result_data = []
+                
+                # Eredmény szöveg
+                result_text = result.result_text or '-'
+                result_data.append(['Eredmény:', result_text])
+                
+                # Melléklet
+                if result.attachment_filename:
+                    result_data.append(['Melléklet:', result.attachment_filename])
+                
+                # Kitöltő adatok
+                completed_by_name = result.completed_by.name if result.completed_by else '-'
+                completed_at_str = result.completed_at.strftime('%Y-%m-%d %H:%M') if result.completed_at else '-'
+                result_data.append(['Kitöltötte:', f"{completed_by_name} • {completed_at_str}"])
+                
+                # Validáló adatok
+                if result.validated_by:
+                    validated_by_name = result.validated_by.name if result.validated_by else '-'
+                    validated_at_str = result.validated_at.strftime('%Y-%m-%d %H:%M') if result.validated_at else '-'
+                    result_data.append(['Validálta:', f"{validated_by_name} • {validated_at_str}"])
+                
+                result_table = Table(result_data, colWidths=[4*cm, 13*cm])
+                result_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F0FDF4')),  # Világos zöld
+                    ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (0, -1), bold_font),
+                    ('FONTNAME', (1, 0), (1, -1), default_font),
+                    ('FONTSIZE', (0, 0), (-1, -1), 10),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#D1FAE5'))  # Zöld border
+                ]))
+                elements.append(result_table)
+                elements.append(Spacer(1, 0.4*cm))
+        else:
+            # Nincs eredmény
+            no_result_style = ParagraphStyle('NoResult', parent=styles['Normal'], fontSize=12, textColor=colors.grey, fontName=default_font)
+            elements.append(Paragraph('Nincs rögzített eredmény.', no_result_style))
     
     doc.build(elements)
     buffer.seek(0)
