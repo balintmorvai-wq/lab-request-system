@@ -182,7 +182,7 @@ function TestTypeManagement() {
   };
 
   const toggleActive = async (testType) => {
-    try:
+    try {
       await axios.put(
         `${API_URL}/test-types/${testType.id}`,
         { ...testType, is_active: !testType.is_active },
