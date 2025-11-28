@@ -209,9 +209,6 @@ class LabRequest(db.Model):
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime)
     
-    # v7.0.26: Department lezárás tracking
-    departments_closed = db.Column(db.Text)  # JSON array: ["Kémia", "Mikrobio"]
-    
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -1511,8 +1508,7 @@ def get_my_worklist(current_user):
                 'my_test_count': my_test_count,
                 'my_completed_count': my_completed_count,
                 'progress': round((my_completed_count / my_test_count * 100) if my_test_count > 0 else 0),
-                'test_list': test_list,  # v7.0.1: Add test list
-                'departments_closed': json.loads(req.departments_closed or '[]')  # v7.0.26: Dept lezárás
+                'test_list': test_list  # v7.0.1: Add test list
             })
     
     # Rendezés: sürgős elöl, határidő szerint
@@ -1599,17 +1595,6 @@ def create_or_update_test_result(current_user):
             return jsonify({'message': 'Nincs jogosultságod ehhez a vizsgálathoz!'}), 403
     elif current_user.role not in ['super_admin']:
         return jsonify({'message': 'Nincs jogosultságod!'}), 403
-    
-    # v7.0.26: Ellenőrizzük hogy dept lezárva-e
-    if current_user.role == 'labor_staff':
-        lab_req = LabRequest.query.get(lab_request_id)
-        closed_depts = json.loads(lab_req.departments_closed or '[]')
-        dept_name = current_user.department.name
-        
-        if dept_name in closed_depts:
-            return jsonify({
-                'error': 'A szervezeti egység lezárta ezt a kérést! Nem szerkeszthető.'
-            }), 403
     
     # Keressük meg vagy hozzuk létre az eredményt
     result = TestResult.query.filter_by(
