@@ -87,61 +87,36 @@ function WorkList() {
     return true;
   });
 
-  // v7.0.25: TELJES ÁTÍRÁS - TestResult alapú számolás (nem LabRequest!)
-  // Department filter hatással van a számokra
+  // v7.0.15: Vizsgálatok száma department szerint
+  // v7.0.24: 'executed' speciális kezelés
   const getTestCountByStatus = (status) => {
-    let allTests = [];
-    
-    // Összegyűjtjük az összes test-et a worklist-ből
-    worklist.forEach(req => {
-      if (!req.test_list) return;
+    const relevantRequests = worklist.filter(req => {
+      // Department szűrés
+      if (departmentFilter !== 'all') {
+        const hasMatchingDept = req.test_list && req.test_list.some(test => 
+          test.department_name === departmentFilter
+        );
+        if (!hasMatchingDept) return false;
+      }
+      // Státusz szűrés
+      if (status === 'all') return true;
+      if (status === 'executed') {
+        // Speciális: van-e 'executed' test result?
+        return req.test_list && req.test_list.some(test => test.status === 'executed');
+      }
+      return req.status === status;
+    });
+
+    // Vizsgálatok számolása (csak matching department)
+    return relevantRequests.reduce((count, req) => {
+      if (!req.test_list) return count;
       
-      // Department filter alkalmazása
-      const testsToCount = departmentFilter === 'all' 
+      const matchingTests = departmentFilter === 'all' 
         ? req.test_list 
         : req.test_list.filter(test => test.department_name === departmentFilter);
       
-      allTests.push(...testsToCount);
-    });
-    
-    // Status filter alkalmazása
-    if (status === 'all') {
-      return allTests.length;
-    }
-    
-    if (status === 'in_progress') {
-      // Végrehajtás alatt = pending vagy in_progress státuszú vizsgálatok
-      return allTests.filter(t => ['pending', 'in_progress'].includes(t.status)).length;
-    }
-    
-    if (status === 'executed') {
-      // Végrehajtott = executed státuszú vizsgálatok
-      return allTests.filter(t => t.status === 'executed').length;
-    }
-    
-    if (status === 'validation_pending') {
-      // Validálásra vár = validation_pending státuszú vizsgálatok
-      return allTests.filter(t => t.status === 'validation_pending').length;
-    }
-    
-    if (status === 'completed') {
-      // Elkészült = completed státuszú vizsgálatok
-      return allTests.filter(t => t.status === 'completed').length;
-    }
-    
-    return 0;
-  };
-
-  // v7.0.25: Kérés statisztikák számolása department filter alapján
-  const getRequestStats = (request) => {
-    const filteredTests = getFilteredTests(request);
-    const totalCount = filteredTests.length;
-    const completedCount = filteredTests.filter(t => 
-      ['completed', 'executed', 'validation_pending'].includes(t.status)
-    ).length;
-    const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-    
-    return { totalCount, completedCount, progress };
+      return count + matchingTests.length;
+    }, 0);
   };
 
   // v7.0.15: Kérés vizsgálatok szűrése department szerint (renderhez)
@@ -209,7 +184,7 @@ function WorkList() {
 
         {/* v7.0.16: Statisztikák Grid + Kereső */}
         <div className="p-6 bg-gray-50">
-          {/* v7.0.25: Statisztika kártyák - VIZSGÁLATOK száma (nem kérések!) */}
+          {/* v7.0.24: Statisztika kártyák - Első sor (3 gomb) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             {/* Összes */}
             <button
@@ -218,9 +193,12 @@ function WorkList() {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Összes vizsgálat</p>
+                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Összes kérés</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">
-                    {getTestCountByStatus('all')}
+                    {worklist.filter(req => {
+                      if (departmentFilter === 'all') return true;
+                      return req.test_list && req.test_list.some(test => test.department_name === departmentFilter);
+                    }).length}
                   </p>
                 </div>
                 <Clipboard className="w-7 h-7 text-gray-500" />
@@ -236,14 +214,18 @@ function WorkList() {
                 <div>
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Végrehajtás alatt</p>
                   <p className="text-2xl font-bold text-yellow-600 mt-1">
-                    {getTestCountByStatus('in_progress')}
+                    {worklist.filter(req => {
+                      if (req.status !== 'in_progress') return false;
+                      if (departmentFilter === 'all') return true;
+                      return req.test_list && req.test_list.some(test => test.department_name === departmentFilter);
+                    }).length}
                   </p>
                 </div>
                 <Clock className="w-7 h-7 text-yellow-600" />
               </div>
             </button>
 
-            {/* v7.0.25: Végrehajtott (executed test results) */}
+            {/* v7.0.24: Végrehajtott (executed test results) */}
             <button
               onClick={() => setFilter('executed')}
               className="bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:border-blue-400 hover:shadow-lg transition-all text-left"
@@ -252,7 +234,12 @@ function WorkList() {
                 <div>
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Végrehajtott</p>
                   <p className="text-2xl font-bold text-blue-600 mt-1">
-                    {getTestCountByStatus('executed')}
+                    {worklist.filter(req => {
+                      const hasExecutedTest = req.test_list && req.test_list.some(test => test.status === 'executed');
+                      if (!hasExecutedTest) return false;
+                      if (departmentFilter === 'all') return true;
+                      return req.test_list && req.test_list.some(test => test.department_name === departmentFilter);
+                    }).length}
                   </p>
                 </div>
                 <CheckCircle className="w-7 h-7 text-blue-600" />
@@ -260,7 +247,7 @@ function WorkList() {
             </button>
           </div>
 
-          {/* v7.0.25: Statisztika kártyák - Második sor (2 gomb) */}
+          {/* v7.0.24: Statisztika kártyák - Második sor (2 gomb) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* Validálásra vár */}
             <button
@@ -271,7 +258,11 @@ function WorkList() {
                 <div>
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Validálásra vár</p>
                   <p className="text-2xl font-bold text-purple-600 mt-1">
-                    {getTestCountByStatus('validation_pending')}
+                    {worklist.filter(req => {
+                      if (req.status !== 'validation_pending') return false;
+                      if (departmentFilter === 'all') return true;
+                      return req.test_list && req.test_list.some(test => test.department_name === departmentFilter);
+                    }).length}
                   </p>
                 </div>
                 <AlertCircle className="w-7 h-7 text-purple-600" />
@@ -287,7 +278,11 @@ function WorkList() {
                 <div>
                   <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Elkészült</p>
                   <p className="text-2xl font-bold text-green-600 mt-1">
-                    {getTestCountByStatus('completed')}
+                    {worklist.filter(req => {
+                      if (req.status !== 'completed') return false;
+                      if (departmentFilter === 'all') return true;
+                      return req.test_list && req.test_list.some(test => test.department_name === departmentFilter);
+                    }).length}
                   </p>
                 </div>
                 <CheckCircle className="w-7 h-7 text-green-600" />
@@ -451,75 +446,55 @@ function WorkList() {
                         <span className="font-medium">{request.company_name}</span>
                       </div>
 
-                      {/* v7.0.25: Vizsgálatok (csak department-matching) - ÖSSZES státusz */}
+                      {/* v7.0.15: Vizsgálatok (csak department-matching) */}
                       {(() => {
                         const filteredTests = getFilteredTests(request);
                         return filteredTests.length > 0 && (
                           <div className="mt-2 pt-2 border-t border-gray-100">
                             <div className="flex flex-wrap gap-1.5">
-                              {filteredTests.map((test) => {
-                                // v7.0.25: Státusz alapú színkód
-                                let badgeClass = '';
-                                let icon = null;
-                                
-                                if (test.status === 'completed') {
-                                  badgeClass = 'bg-green-100 text-green-700 border border-green-200';
-                                  icon = <CheckCircle className="w-3 h-3" />;
-                                } else if (test.status === 'executed') {
-                                  badgeClass = 'bg-blue-100 text-blue-700 border border-blue-200';
-                                  icon = <CheckCircle className="w-3 h-3" />;
-                                } else if (test.status === 'validation_pending') {
-                                  badgeClass = 'bg-purple-100 text-purple-700 border border-purple-200';
-                                } else if (test.status === 'in_progress') {
-                                  badgeClass = 'bg-yellow-100 text-yellow-700 border border-yellow-200';
-                                } else {
-                                  // pending
-                                  badgeClass = 'bg-gray-100 text-gray-600 border border-gray-200';
-                                }
-                                
-                                return (
-                                  <div 
-                                    key={test.id}
-                                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${badgeClass}`}
-                                  >
-                                    <span className="font-semibold">{test.name}</span>
-                                    {icon}
-                                  </div>
-                                );
-                              })}
+                              {filteredTests.map((test) => (
+                                <div 
+                                  key={test.id}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${
+                                    test.status === 'completed' 
+                                      ? 'bg-green-100 text-green-700 border border-green-200' 
+                                      : test.status === 'in_progress'
+                                      ? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                                  }`}
+                                >
+                                  <span className="font-semibold">{test.name}</span>
+                                  {test.status === 'completed' && <CheckCircle className="w-3 h-3" />}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         );
                       })()}
                     </div>
 
-                    {/* Közép - Progress (v7.0.25: department filter alapján) */}
-                    {(() => {
-                      const { totalCount, completedCount, progress } = getRequestStats(request);
-                      return (
-                        <div className="flex items-center gap-2">
-                          <div className="text-right">
-                            <div className="text-sm font-bold text-gray-900">
-                              {completedCount} / {totalCount}
-                            </div>
-                            <div className="text-xs text-gray-600">vizsgálat</div>
-                          </div>
-                          <div className="w-20">
-                            <div className="bg-gray-200 rounded-full h-2">
-                              <div
-                                className={`h-2 rounded-full transition-all ${
-                                  progress === 100 ? 'bg-green-500' : 'bg-indigo-600'
-                                }`}
-                                style={{ width: `${progress}%` }}
-                              />
-                            </div>
-                            <div className="text-xs text-center text-gray-700 font-semibold mt-0.5">
-                              {progress}%
-                            </div>
-                          </div>
+                    {/* Közép - Progress */}
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-gray-900">
+                          {request.my_completed_count} / {request.my_test_count}
                         </div>
-                      );
-                    })()}
+                        <div className="text-xs text-gray-600">vizsgálat</div>
+                      </div>
+                      <div className="w-20">
+                        <div className="bg-gray-200 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              request.progress === 100 ? 'bg-green-500' : 'bg-indigo-600'
+                            }`}
+                            style={{ width: `${request.progress}%` }}
+                          />
+                        </div>
+                        <div className="text-xs text-center text-gray-700 font-semibold mt-0.5">
+                          {request.progress}%
+                        </div>
+                      </div>
+                    </div>
 
                     {/* Jobb oldal - Gomb */}
                     <button
