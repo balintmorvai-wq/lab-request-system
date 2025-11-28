@@ -209,6 +209,9 @@ class LabRequest(db.Model):
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime)
     
+    # v7.0.26: Department lezárás tracking
+    departments_closed = db.Column(db.Text)  # JSON array: ["Kémia", "Mikrobio"]
+    
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -234,8 +237,8 @@ class TestResult(db.Model):
     attachment_filename = db.Column(db.String(200))  # Csatolt fájl neve
     
     # Státusz és követés
-    # v7.0.24: 'executed' = dept kész, mások még dolgoznak
-    status = db.Column(db.String(50), default='pending')  # 'pending', 'in_progress', 'executed', 'validation_pending', 'completed'
+    # v7.0.25: Egyszerűsített státuszok
+    status = db.Column(db.String(50), default='pending')  # 'pending', 'in_progress', 'completed', 'validation_pending'
     completed_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)  # Ki töltötte ki
     completed_at = db.Column(db.DateTime)  # Mikor töltötte ki
     
@@ -1457,8 +1460,8 @@ def get_my_worklist(current_user):
             
             # Számoljuk, hány saját vizsgálat van és hány elkészült
             my_test_count = len(my_tests)
-            # v7.0.24: 'executed' is completed (dept kész)
-            my_completed_count = sum(1 for tt in my_tests if results_dict.get(tt.id) and results_dict[tt.id].status in ['completed', 'executed', 'validation_pending'])
+            # v7.0.25: Egyszerűsített - csak completed és validation_pending
+            my_completed_count = sum(1 for tt in my_tests if results_dict.get(tt.id) and results_dict[tt.id].status in ['completed', 'validation_pending'])
             
             # v7.0.1: Test list for display
             test_list = [
@@ -1484,7 +1487,8 @@ def get_my_worklist(current_user):
                 'my_test_count': my_test_count,
                 'my_completed_count': my_completed_count,
                 'progress': round((my_completed_count / my_test_count * 100) if my_test_count > 0 else 0),
-                'test_list': test_list  # v7.0.1: Add test list
+                'test_list': test_list,  # v7.0.1: Add test list
+                'departments_closed': json.loads(req.departments_closed or '[]')  # v7.0.26: Dept lezárás
             })
     
     # Rendezés: sürgős elöl, határidő szerint
@@ -1552,6 +1556,7 @@ def get_test_results(current_user, request_id):
 def create_or_update_test_result(current_user):
     """
     Vizsgálati eredmény mentése vagy frissítése
+    v7.0.26: Tiltás ha dept lezárva
     """
     data = request.get_json()
     
@@ -1570,6 +1575,17 @@ def create_or_update_test_result(current_user):
             return jsonify({'message': 'Nincs jogosultságod ehhez a vizsgálathoz!'}), 403
     elif current_user.role not in ['super_admin']:
         return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    # v7.0.26: Ellenőrizzük hogy dept lezárva-e
+    if current_user.role == 'labor_staff':
+        lab_req = LabRequest.query.get(lab_request_id)
+        closed_depts = json.loads(lab_req.departments_closed or '[]')
+        dept_name = current_user.department.name
+        
+        if dept_name in closed_depts:
+            return jsonify({
+                'error': 'A szervezeti egység lezárta ezt a kérést! Nem szerkeszthető.'
+            }), 403
     
     # Keressük meg vagy hozzuk létre az eredményt
     result = TestResult.query.filter_by(
@@ -1696,32 +1712,35 @@ def download_result_attachment(current_user, result_id):
 @token_required
 def submit_for_validation(current_user, request_id):
     """
-    v7.0.24: Intelligens submit logic
+    v7.0.25: Egyszerűsített validation workflow
     
-    Labor staff submit:
-      1. Check: saját dept minden vizsgálata completed?
-      2. Ha igen → saját dept results status = 'executed'
-      3. Check: MINDEN dept kész (executed/validation_pending)?
-      4. Ha igen → kérés status = 'validation_pending', összes result = 'validation_pending'
-      5. Ha nem → kérés marad 'in_progress', response: "Szervezeti egység eredményei beküldve"
+    Flow:
+    1. Labor staff check: saját dept minden vizsgálat kész?
+    2. GLOBÁLIS check: MINDEN vizsgálat kész?
+       - IGEN → status = 'validation_pending', results → 'validation_pending'
+       - NEM  → error (nem lehet validálásra küldeni)
     """
     req = LabRequest.query.get_or_404(request_id)
     
     if current_user.role not in ['labor_staff', 'super_admin']:
         return jsonify({'message': 'Nincs jogosultságod!'}), 403
     
+    # Dept check szükséges labor staff-nál
+    if current_user.role == 'labor_staff' and not current_user.department_id:
+        return jsonify({'message': 'Nincs szervezeti egység hozzárendelve!'}), 400
+    
     test_type_ids = json.loads(req.test_types)
     test_types = TestType.query.filter(TestType.id.in_(test_type_ids)).all()
     all_results = TestResult.query.filter_by(lab_request_id=request_id).all()
     results_dict = {r.test_type_id: r for r in all_results}
     
-    # STEP 1: Labor staff esetén check saját dept
+    # STEP 1: Labor staff esetén ellenőrizzük, hogy saját dept minden vizsgálat kész-e
     if current_user.role == 'labor_staff':
         my_tests = [tt for tt in test_types if tt.department_id == current_user.department_id]
         
         incomplete_my_tests = [
             tt for tt in my_tests 
-            if not results_dict.get(tt.id) or results_dict[tt.id].status not in ['completed', 'executed']
+            if not results_dict.get(tt.id) or results_dict[tt.id].status != 'completed'
         ]
         
         if incomplete_my_tests:
@@ -1729,52 +1748,49 @@ def submit_for_validation(current_user, request_id):
                 'message': 'Nem minden vizsgálat van kitöltve!',
                 'incomplete_tests': [tt.name for tt in incomplete_my_tests]
             }), 400
-        
-        # STEP 2: Saját dept results → 'executed'
-        for tt in my_tests:
-            if results_dict.get(tt.id) and results_dict[tt.id].status == 'completed':
-                results_dict[tt.id].status = 'executed'
     
-    # STEP 3: Check MINDEN dept kész?
-    all_executed_or_validated = all(
+    # STEP 2: GLOBÁLIS check - MINDEN vizsgálat kész?
+    all_completed = all(
         results_dict.get(tt.id) and 
-        results_dict[tt.id].status in ['executed', 'validation_pending', 'completed']
+        results_dict[tt.id].status in ['completed', 'validation_pending']
         for tt in test_types
     )
     
-    if all_executed_or_validated:
-        # STEP 4: MINDEN dept kész → validation_pending
-        req.status = 'validation_pending'
-        
-        # Összes executed result → validation_pending
-        for result in all_results:
-            if result.status == 'executed':
-                result.status = 'validation_pending'
-        
-        db.session.commit()
-        
-        # Értesítés az adminoknak
-        admins = User.query.filter_by(role='super_admin').all()
-        for admin in admins:
-            create_notification(
-                admin.id,
-                req.id,
-                'validation_pending',
-                f'Új validálásra váró kérés: {req.request_number}'
-            )
-        
+    if not all_completed:
+        # Még nem minden vizsgálat kész
+        incomplete_tests = [
+            tt.name for tt in test_types 
+            if not results_dict.get(tt.id) or results_dict[tt.id].status not in ['completed', 'validation_pending']
+        ]
         return jsonify({
-            'message': 'Kérés validálásra küldve! Minden szervezeti egység befejezte a vizsgálatokat.',
-            'status': 'validation_pending'
-        })
-    else:
-        # STEP 5: NEM minden dept kész → kérés marad in_progress
-        db.session.commit()
-        
-        return jsonify({
-            'message': 'Szervezeti egység eredményei beküldve. Más szervezeti egységek még dolgoznak a kérésen.',
-            'status': 'executed'
-        })
+            'message': 'Még nem minden vizsgálat készült el!',
+            'incomplete_tests': incomplete_tests
+        }), 400
+    
+    # MINDEN vizsgálat kész → validation_pending
+    req.status = 'validation_pending'
+    
+    # Összes completed result → validation_pending
+    for result in all_results:
+        if result.status == 'completed':
+            result.status = 'validation_pending'
+    
+    db.session.commit()
+    
+    # Értesítés az adminoknak
+    admins = User.query.filter_by(role='super_admin').all()
+    for admin in admins:
+        create_notification(
+            admin.id,
+            req.id,
+            'validation_pending',
+            f'Új validálásra váró kérés: {req.request_number}'
+        )
+    
+    return jsonify({
+        'message': 'Kérés validálásra küldve!',
+        'status': 'validation_pending'
+    })
 
 
 @app.route('/api/test-results/<int:result_id>/validate', methods=['PUT'])

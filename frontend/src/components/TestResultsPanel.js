@@ -61,6 +61,13 @@ function TestResultsPanel() {
       alert('Nincs jogosultságod szerkeszteni ezt a vizsgálatot!');
       return;
     }
+    
+    // v7.0.26: Dept lezárás ellenőrzés
+    const deptClosed = request?.departments_closed && request.departments_closed.includes(user?.department_name);
+    if (deptClosed) {
+      alert('A szervezeti egység lezárta ezt a kérést! Nem szerkeszthető.');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -83,7 +90,7 @@ function TestResultsPanel() {
       alert('Eredmény mentve!');
     } catch (error) {
       console.error('Mentési hiba:', error);
-      alert(error.response?.data?.message || 'Hiba történt a mentés során');
+      alert(error.response?.data?.message || error.response?.data?.error || 'Hiba történt a mentés során');
     } finally {
       setSaving(false);
     }
@@ -166,6 +173,13 @@ function TestResultsPanel() {
   };
 
   const submitForValidation = async () => {
+    // v7.0.26: Dept lezárás ellenőrzés
+    const deptClosed = request?.departments_closed && request.departments_closed.includes(user?.department_name);
+    if (deptClosed) {
+      alert('A szervezeti egység már lezárta ezt a kérést!');
+      return;
+    }
+    
     // Ellenőrizzük, hogy minden saját vizsgálat ki van-e töltve
     const myIncompleteTests = testResults.filter(
       tr => tr.can_edit && tr.status !== 'completed'
@@ -182,13 +196,13 @@ function TestResultsPanel() {
 
     setSaving(true);
     try {
-      await axios.post(
+      const response = await axios.post(
         `${API_URL}/requests/${id}/submit-validation`,
         {},
         { headers: getAuthHeaders() }
       );
       
-      alert('Kérés validálásra küldve!');
+      alert(response.data.message);
       navigate('/worklist');
     } catch (error) {
       console.error('Küldési hiba:', error);
@@ -334,18 +348,26 @@ function TestResultsPanel() {
                     Kérés lezárása
                   </button>
                 ) : (
-                  <button
-                    onClick={submitForValidation}
-                    disabled={saving || completedCount < myTests.length}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                      completedCount < myTests.length
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-green-600 text-white hover:bg-green-700'
-                    }`}
-                  >
-                    <Send className="w-4 h-4" />
-                    Validálásra küldés
-                  </button>
+                  <>
+                  {(() => {
+                    const deptClosed = request?.departments_closed && request.departments_closed.includes(user?.department_name);
+                    return (
+                      <button
+                        onClick={submitForValidation}
+                        disabled={saving || completedCount < myTests.length || deptClosed}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                          completedCount < myTests.length || deptClosed
+                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                        title={deptClosed ? 'Szervezeti egység már lezárta ezt a kérést' : ''}
+                      >
+                        <Send className="w-4 h-4" />
+                        {deptClosed ? 'Lezárva' : 'Validálásra küldés'}
+                      </button>
+                    );
+                  })()}
+                  </>
                 )}
               </>
             )}
@@ -674,8 +696,21 @@ function TestResultsPanel() {
                     <p>Nincs olyan vizsgálat, ami a te szervezeti egységedhez tartozik.</p>
                   </div>
                 ) : (
-                  myTests.map((testResult) => (
+                  myTests.map((testResult) => {
+                    // v7.0.26: Dept lezárás check
+                    const deptClosed = request?.departments_closed && request.departments_closed.includes(user?.department_name);
+                    const isEditable = testResult.can_edit && !deptClosed;
+                    
+                    return (
                     <div key={testResult.test_type_id} className="bg-white rounded-lg shadow p-6">
+                      {/* v7.0.26: Lezárt figyelmeztetés */}
+                      {deptClosed && (
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-sm font-medium text-blue-800">🔒 Szervezeti egység lezárta ezt a kérést</p>
+                          <p className="text-xs text-blue-700 mt-1">Az eredmények nem szerkeszthetők</p>
+                        </div>
+                      )}
+                      
                       <div className="flex items-start justify-between mb-4">
                         <div className="flex-1">
                           <h3 className="font-semibold text-gray-900">
@@ -706,7 +741,7 @@ function TestResultsPanel() {
                           rows="4"
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
                           placeholder="Írd be a vizsgálat eredményét..."
-                          disabled={!testResult.can_edit}
+                          disabled={!isEditable}
                         />
                       </div>
 
@@ -729,12 +764,12 @@ function TestResultsPanel() {
                             id={`file-${testResult.test_type_id}`}
                             onChange={(e) => handleFileUpload(testResult, e)}
                             className="hidden"
-                            disabled={!testResult.can_edit || !testResult.result_id}
+                            disabled={!isEditable || !testResult.result_id}
                           />
                           <label
                             htmlFor={`file-${testResult.test_type_id}`}
                             className={`flex items-center gap-2 px-4 py-2 border rounded-lg cursor-pointer transition-colors ${
-                              !testResult.can_edit || !testResult.result_id
+                              !isEditable || !testResult.result_id
                                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                 : 'border-gray-300 hover:bg-gray-50'
                             }`}
@@ -757,9 +792,9 @@ function TestResultsPanel() {
                       {/* Mentés gomb */}
                       <button
                         onClick={() => saveResult(testResult)}
-                        disabled={saving || !testResult.result_text?.trim() || !testResult.can_edit}
+                        disabled={saving || !testResult.result_text?.trim() || !isEditable}
                         className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                          !testResult.result_text?.trim() || !testResult.can_edit
+                          !testResult.result_text?.trim() || !isEditable
                             ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             : 'bg-indigo-600 text-white hover:bg-indigo-700'
                         }`}
@@ -774,7 +809,8 @@ function TestResultsPanel() {
                         </div>
                       )}
                     </div>
-                  ))
+                    );
+                  })
                 )}
               </>
             )}
