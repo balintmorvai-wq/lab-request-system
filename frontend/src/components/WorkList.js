@@ -93,6 +93,7 @@ function WorkList() {
 
   // v7.0.25: Részletes státusz számolás vizsgálat szinten
   const getDetailedStats = (status) => {
+    const isAdmin = user?.role === 'super_admin';
     const myDeptName = user?.department_name;
     let requestCount = 0;
     let completedTests = 0;
@@ -101,22 +102,25 @@ function WorkList() {
     worklist.forEach(req => {
       if (req.status !== status) return;
       
-      const myDeptTests = req.test_list?.filter(t => t.department_name === myDeptName) || [];
-      if (myDeptTests.length === 0) return;
+      // Admin: minden vizsgálat, Labor staff: csak saját dept
+      const relevantTests = isAdmin 
+        ? (req.test_list || [])
+        : (req.test_list?.filter(t => t.department_name === myDeptName) || []);
+      
+      if (relevantTests.length === 0) return;
       
       requestCount++;
-      totalTests += myDeptTests.length;
+      totalTests += relevantTests.length;
       
       if (status === 'in_progress') {
         // Végrehajtás alatt: completed státuszú vizsgálatok (végrehajtva)
-        completedTests += myDeptTests.filter(t => t.status === 'completed').length;
+        completedTests += relevantTests.filter(t => t.status === 'completed').length;
       } else if (status === 'validation_pending') {
         // Validálás alatt: completed státuszú vizsgálatok (validálva az admin által)
-        // totalTests = minden vizsgálat (validation_pending + completed)
-        completedTests += myDeptTests.filter(t => t.status === 'completed').length;
+        completedTests += relevantTests.filter(t => t.status === 'completed').length;
       } else if (status === 'completed') {
         // Elkészült: minden vizsgálat completed (final)
-        completedTests += myDeptTests.filter(t => t.status === 'completed').length;
+        completedTests += relevantTests.filter(t => t.status === 'completed').length;
       }
     });
     
@@ -316,11 +320,6 @@ function WorkList() {
                       </p>
                     </div>
                   </div>
-                  {/* Success indicator */}
-                  <div className="flex items-center gap-2 bg-green-50 rounded-lg p-2">
-                    <CheckCircle className="w-4 h-4 text-green-600" />
-                    <span className="text-xs text-green-700 font-semibold">Minden vizsgálat kész</span>
-                  </div>
                 </button>
               );
             })()}
@@ -358,9 +357,8 @@ function WorkList() {
             </div>
           )}
 
-          {/* Kereső + Szűrők */}
+          {/* Kereső */}
           <div className="flex flex-col md:flex-row gap-3">
-            {/* Kereső */}
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
@@ -370,60 +368,6 @@ function WorkList() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
               />
-            </div>
-
-            {/* v7.0.25: Státusz szűrők - 3 egyszerűsített státusz */}
-            <div className="flex gap-2 flex-wrap">
-              {(() => {
-                const inProgressStats = getDetailedStats('in_progress');
-                const validationStats = getDetailedStats('validation_pending');
-                const completedStats = getDetailedStats('completed');
-                
-                return (
-                  <>
-                    <button
-                      onClick={() => setFilter('in_progress')}
-                      className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                        filter === 'in_progress'
-                          ? 'bg-yellow-600 text-white shadow-md'
-                          : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-yellow-300'
-                      }`}
-                    >
-                      Végrehajtás alatt ({inProgressStats.requestCount})
-                    </button>
-                    <button
-                      onClick={() => setFilter('validation_pending')}
-                      className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                        filter === 'validation_pending'
-                          ? 'bg-purple-600 text-white shadow-md'
-                          : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-purple-300'
-                      }`}
-                    >
-                      Validálás alatt ({validationStats.requestCount})
-                    </button>
-                    <button
-                      onClick={() => setFilter('completed')}
-                      className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                        filter === 'completed'
-                          ? 'bg-green-600 text-white shadow-md'
-                          : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-green-300'
-                      }`}
-                    >
-                      Elkészült ({completedStats.requestCount})
-                    </button>
-                    <button
-                      onClick={() => setFilter('all')}
-                      className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                        filter === 'all'
-                          ? 'bg-indigo-600 text-white shadow-md'
-                          : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-300'
-                      }`}
-                    >
-                      Összes ({worklist.length})
-                    </button>
-                  </>
-                );
-              })()}
             </div>
           </div>
         </div>
@@ -510,9 +454,9 @@ function WorkList() {
                                   badgeClass = 'bg-green-100 text-green-700 border border-green-200';
                                   icon = <CheckCircle className="w-3 h-3" />;
                                 } else {
-                                  // in_progress - completed vagy pending
+                                  // in_progress - completed (zöld) vagy pending (szürke)
                                   if (test.status === 'completed') {
-                                    badgeClass = 'bg-blue-100 text-blue-700 border border-blue-200';
+                                    badgeClass = 'bg-green-100 text-green-700 border border-green-200';
                                     icon = <CheckCircle className="w-3 h-3" />;
                                   } else {
                                     badgeClass = 'bg-gray-100 text-gray-600 border border-gray-200';
