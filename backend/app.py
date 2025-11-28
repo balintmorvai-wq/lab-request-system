@@ -1145,9 +1145,21 @@ def create_request(current_user):
         except:
             pass
     
-    # Legacy sampling_date support
-    sampling_date = datetime.datetime.fromisoformat(data.get('sampling_date')) if data.get('sampling_date') else None
-    deadline = datetime.datetime.fromisoformat(data.get('deadline')) if data.get('deadline') and data.get('deadline').strip() else None
+    # Legacy sampling_date support (v7.0.25: fix empty string crash)
+    sampling_date = None
+    if data.get('sampling_date') and data.get('sampling_date').strip():
+        try:
+            sampling_date = datetime.datetime.fromisoformat(data.get('sampling_date'))
+        except:
+            pass
+    
+    # Deadline parsing (v7.0.25: fix empty string crash)
+    deadline = None
+    if data.get('deadline') and data.get('deadline').strip():
+        try:
+            deadline = datetime.datetime.fromisoformat(data.get('deadline'))
+        except:
+            pass
     
     # v6.7: Generate request number
     company = Company.query.get(current_user.company_id)
@@ -1327,9 +1339,21 @@ def update_request(current_user, request_id):
     if 'contact_phone' in data:
         req.contact_phone = data['contact_phone']            # ÚJ
     if 'sampling_date' in data:
-        req.sampling_date = datetime.datetime.fromisoformat(data['sampling_date']) if data['sampling_date'] else None
+        if data['sampling_date'] and data['sampling_date'].strip():
+            try:
+                req.sampling_date = datetime.datetime.fromisoformat(data['sampling_date'])
+            except:
+                req.sampling_date = None
+        else:
+            req.sampling_date = None
     if 'deadline' in data:
-        req.deadline = datetime.datetime.fromisoformat(data['deadline']) if data['deadline'] and data['deadline'].strip() else None
+        if data['deadline'] and data['deadline'].strip():
+            try:
+                req.deadline = datetime.datetime.fromisoformat(data['deadline'])
+            except:
+                req.deadline = None
+        else:
+            req.deadline = None
     if 'special_instructions' in data:
         req.special_instructions = data['special_instructions']
     if 'test_types' in data:
