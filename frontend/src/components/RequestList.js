@@ -212,11 +212,6 @@ function RequestList() {
       color: 'bg-yellow-100 text-yellow-800',
       icon: Clock 
     },
-    awaiting_other_departments: {
-      label: 'Másik szervezeti egységre vár',
-      color: 'bg-orange-100 text-orange-800',
-      icon: Clock
-    },
     validation_pending: {
       label: 'Validálásra vár',
       color: 'bg-purple-100 text-purple-800',
@@ -318,13 +313,7 @@ function RequestList() {
         ) : (
           <div className="divide-y divide-gray-200">
             {filteredRequests.map((request) => {
-              // v7.0.26: Fallback ha ismeretlen status
-              const statusInfo = statusConfig[request.status] || {
-                label: request.status,
-                color: 'bg-gray-100 text-gray-800',
-                icon: AlertCircle
-              };
-              const StatusIcon = statusInfo.icon;
+              const StatusIcon = statusConfig[request.status].icon;
               const isPendingApproval = request.status === 'pending_approval';
               
               return (
@@ -344,9 +333,9 @@ function RequestList() {
                             ({request.internal_id})
                           </span>
                         )}
-                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusInfo.color} flex items-center gap-1`}>
+                        <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${statusConfig[request.status].color} flex items-center gap-1`}>
                           <StatusIcon className="w-3 h-3" />
-                          {statusInfo.label}
+                          {statusConfig[request.status].label}
                         </span>
                         <span className={`text-xs font-bold ${urgencyColors[request.urgency]}`}>
                           {urgencyLabels[request.urgency]}

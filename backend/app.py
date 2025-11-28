@@ -209,9 +209,6 @@ class LabRequest(db.Model):
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime)
     
-    # v7.0.26: Department lezárás tracking
-    departments_closed = db.Column(db.Text)  # JSON array: ["Kémia", "Mikrobio"]
-    
     # Timestamps
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
@@ -1487,8 +1484,7 @@ def get_my_worklist(current_user):
                 'my_test_count': my_test_count,
                 'my_completed_count': my_completed_count,
                 'progress': round((my_completed_count / my_test_count * 100) if my_test_count > 0 else 0),
-                'test_list': test_list,  # v7.0.1: Add test list
-                'departments_closed': json.loads(req.departments_closed or '[]')  # v7.0.26: Dept lezárás
+                'test_list': test_list  # v7.0.1: Add test list
             })
     
     # Rendezés: sürgős elöl, határidő szerint
@@ -1556,7 +1552,6 @@ def get_test_results(current_user, request_id):
 def create_or_update_test_result(current_user):
     """
     Vizsgálati eredmény mentése vagy frissítése
-    v7.0.26: Tiltás ha dept lezárva
     """
     data = request.get_json()
     
@@ -1575,17 +1570,6 @@ def create_or_update_test_result(current_user):
             return jsonify({'message': 'Nincs jogosultságod ehhez a vizsgálathoz!'}), 403
     elif current_user.role not in ['super_admin']:
         return jsonify({'message': 'Nincs jogosultságod!'}), 403
-    
-    # v7.0.26: Ellenőrizzük hogy dept lezárva-e
-    if current_user.role == 'labor_staff':
-        lab_req = LabRequest.query.get(lab_request_id)
-        closed_depts = json.loads(lab_req.departments_closed or '[]')
-        dept_name = current_user.department.name
-        
-        if dept_name in closed_depts:
-            return jsonify({
-                'error': 'A szervezeti egység lezárta ezt a kérést! Nem szerkeszthető.'
-            }), 403
     
     # Keressük meg vagy hozzuk létre az eredményt
     result = TestResult.query.filter_by(
@@ -1712,31 +1696,26 @@ def download_result_attachment(current_user, result_id):
 @token_required
 def submit_for_validation(current_user, request_id):
     """
-    v7.0.26: Department-specific lezárás + intelligens státusz
+    v7.0.24: Intelligens submit logic
     
-    Flow:
-    1. Labor staff check: saját dept minden vizsgálat kész?
-    2. Dept lezárás (departments_closed JSON-ba)
-    3. Saját dept results → 'executed'
-    4. GLOBÁLIS check: MINDEN vizsgálat kész?
-       - IGEN → status = 'validation_pending', results → 'validation_pending'
-       - NEM  → status = 'awaiting_other_departments'
+    Labor staff submit:
+      1. Check: saját dept minden vizsgálata completed?
+      2. Ha igen → saját dept results status = 'executed'
+      3. Check: MINDEN dept kész (executed/validation_pending)?
+      4. Ha igen → kérés status = 'validation_pending', összes result = 'validation_pending'
+      5. Ha nem → kérés marad 'in_progress', response: "Szervezeti egység eredményei beküldve"
     """
     req = LabRequest.query.get_or_404(request_id)
     
     if current_user.role not in ['labor_staff', 'super_admin']:
         return jsonify({'message': 'Nincs jogosultságod!'}), 403
     
-    # Dept check szükséges labor staff-nál
-    if current_user.role == 'labor_staff' and not current_user.department_id:
-        return jsonify({'message': 'Nincs szervezeti egység hozzárendelve!'}), 400
-    
     test_type_ids = json.loads(req.test_types)
     test_types = TestType.query.filter(TestType.id.in_(test_type_ids)).all()
     all_results = TestResult.query.filter_by(lab_request_id=request_id).all()
     results_dict = {r.test_type_id: r for r in all_results}
     
-    # STEP 1: Labor staff esetén ellenőrizzük, hogy saját dept minden vizsgálat kész-e
+    # STEP 1: Labor staff esetén check saját dept
     if current_user.role == 'labor_staff':
         my_tests = [tt for tt in test_types if tt.department_id == current_user.department_id]
         
@@ -1751,20 +1730,12 @@ def submit_for_validation(current_user, request_id):
                 'incomplete_tests': [tt.name for tt in incomplete_my_tests]
             }), 400
         
-        # STEP 2: Dept lezárás
-        closed_depts = json.loads(req.departments_closed or '[]')
-        dept_name = current_user.department.name
-        
-        if dept_name not in closed_depts:
-            closed_depts.append(dept_name)
-            req.departments_closed = json.dumps(closed_depts)
-        
-        # STEP 3: Saját dept results → 'executed'
+        # STEP 2: Saját dept results → 'executed'
         for tt in my_tests:
             if results_dict.get(tt.id) and results_dict[tt.id].status == 'completed':
                 results_dict[tt.id].status = 'executed'
     
-    # STEP 4: GLOBÁLIS check - MINDEN vizsgálat kész?
+    # STEP 3: Check MINDEN dept kész?
     all_executed_or_validated = all(
         results_dict.get(tt.id) and 
         results_dict[tt.id].status in ['executed', 'validation_pending', 'completed']
@@ -1772,7 +1743,7 @@ def submit_for_validation(current_user, request_id):
     )
     
     if all_executed_or_validated:
-        # MINDEN dept kész → validation_pending
+        # STEP 4: MINDEN dept kész → validation_pending
         req.status = 'validation_pending'
         
         # Összes executed result → validation_pending
@@ -1797,13 +1768,12 @@ def submit_for_validation(current_user, request_id):
             'status': 'validation_pending'
         })
     else:
-        # NEM minden dept kész → awaiting_other_departments
-        req.status = 'awaiting_other_departments'
+        # STEP 5: NEM minden dept kész → kérés marad in_progress
         db.session.commit()
         
         return jsonify({
-            'message': 'Szervezeti egység lezárva. Más szervezeti egységek még dolgoznak a kérésen.',
-            'status': 'awaiting_other_departments'
+            'message': 'Szervezeti egység eredményei beküldve. Más szervezeti egységek még dolgoznak a kérésen.',
+            'status': 'executed'
         })
 
 
