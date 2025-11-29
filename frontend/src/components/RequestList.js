@@ -250,11 +250,6 @@ function RequestList() {
       color: 'bg-yellow-100 text-yellow-800',
       icon: Clock 
     },
-    awaiting_other_departments: {  // v7.0.26: Törölt de legacy support
-      label: 'Másik szervezeti egységre vár',
-      color: 'bg-orange-100 text-orange-800',
-      icon: Clock
-    },
     validation_pending: {
       label: 'Validálásra vár',
       color: 'bg-purple-100 text-purple-800',

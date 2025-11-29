@@ -91,7 +91,8 @@ function Layout() {
               { name: 'Kategóriák', href: '/categories', icon: Folder },
               { name: 'Vizsgálattípusok', href: '/test-types', icon: TestTube },
               { name: 'Cégek', href: '/companies', icon: Building },
-              { name: 'Felhasználók', href: '/users', icon: Users }
+              { name: 'Felhasználók', href: '/users', icon: Users },
+              { name: 'Értesítések', href: '/notifications', icon: Bell }  // v8.0
             ].map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.href;

@@ -19,6 +19,9 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import qrcode  # v7.0.31: QR kód generálás
 
+# v8.0: Notification Service
+from notification_service import NotificationService
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 
@@ -257,16 +260,7 @@ class TestResult(db.Model):
     completed_by = db.relationship('User', foreign_keys=[completed_by_user_id], backref='completed_test_results')
     validated_by = db.relationship('User', foreign_keys=[validated_by_user_id], backref='validated_test_results')  # v7.0.3
 
-class Notification(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    request_id = db.Column(db.Integer, db.ForeignKey('lab_request.id'), nullable=False)
-    type = db.Column(db.String(50), nullable=False)
-    message = db.Column(db.Text, nullable=False)
-    is_read = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    user = db.relationship('User', backref='notifications')
-    lab_request = db.relationship('LabRequest', backref='notifications')
+# v8.0: Notification model ELTÁVOLÍTVA - új notification rendszer használata
 
 # --- Request Number Generator ---
 def generate_request_number(company_short_name):
@@ -304,17 +298,7 @@ def generate_request_number(company_short_name):
     return f"{prefix}{next_num:03d}"
 
 # --- Notification Helper ---
-def create_notification(user_id, request_id, notif_type, message):
-    """Create a new notification - add to session but don't commit"""
-    notification = Notification(
-        user_id=user_id,
-        request_id=request_id,
-        type=notif_type,
-        message=message
-    )
-    db.session.add(notification)
-    # Note: No commit here - will be committed with the main transaction
-
+# v8.0: create_notification ELTÁVOLÍTVA - NotificationService használata
 # --- Auth Decorators ---
 def token_required(f):
     @wraps(f)
@@ -1208,31 +1192,17 @@ def create_request(current_user):
     
     db.session.add(new_request)
     
-    # Notifications - add to session before commit
-    if new_request.status == 'pending_approval':
-        company_admins = User.query.filter_by(company_id=current_user.company_id, role='company_admin').all()
-        for admin in company_admins:
-            create_notification(
-                admin.id,
-                new_request.id,
-                'pending_approval',
-                f'{current_user.name} beküldött egy laborkérést jóváhagyásra: {new_request.request_number}'
-            )
-    # v7.0.29: Company admin jóváhagyásra küldés → awaiting_shipment → értesítés logistics-nak
-    elif new_request.status == 'awaiting_shipment':
-        logistics_users = User.query.filter(User.role.in_(['university_logistics', 'company_logistics'])).all()
-        for logistics_user in logistics_users:
-            if logistics_user.role == 'company_logistics' and logistics_user.company_id != new_request.company_id:
-                continue
-            create_notification(
-                logistics_user.id,
-                new_request.id,
-                'awaiting_shipment',
-                f'Új kérés szállításra vár: {new_request.request_number}'
-            )
-    
-    # Single commit for request and notifications
+    # Single commit for request
     db.session.commit()
+    
+    # v8.0: Notification Service - új kérés létrehozva
+    event_data = {
+        'request_number': new_request.request_number,
+        'company_name': new_request.company.name if new_request.company else '',
+        'requester_name': current_user.name,
+        'category': new_request.category.name if new_request.category else ''
+    }
+    NotificationService.notify('new_request', request_id=new_request.id, event_data=event_data)
     
     # v7.0: Automatikus TestResult rekordok létrehozása minden vizsgálathoz
     # v7.0.1: Fix - use test_type_ids already parsed above (line 911)
@@ -1264,100 +1234,37 @@ def update_request(current_user, request_id):
     
     # Update fields
     if 'status' in data:
-        req.status = data['status']
+        old_status_value = old_status
+        new_status_value = data['status']
+        req.status = new_status_value
         
-        # v6.5: Notify company admin when user submits for approval OR admin approves
-        if data['status'] == 'pending_approval' and old_status != 'pending_approval':
-            # User submits for company approval
-            company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
-            for admin in company_admins:
-                if admin.id != current_user.id:  # Don't notify self
-                    create_notification(
-                        admin.id,
-                        req.id,
-                        'pending_approval',
-                        f'{current_user.name} beküldött egy laborkérést jóváhagyásra: {req.sample_id}'
-                    )
+        # Legacy support: submitted → arrived_at_provider
+        if new_status_value == 'submitted':
+            new_status_value = 'arrived_at_provider'
+            req.status = new_status_value
         
-        # v7.0.27: Company approval → awaiting_shipment (logisztikai modul)
-        if data['status'] == 'awaiting_shipment' and current_user.role == 'company_admin' and old_status == 'pending_approval':
+        # v8.0: Státuszváltozás notification
+        if new_status_value != old_status_value:
+            event_data = {
+                'request_number': req.request_number,
+                'old_status': old_status_value,
+                'new_status': new_status_value,
+                'company_name': req.company.name if req.company else '',
+                'requester_name': req.user.name
+            }
+            NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
+        
+        # v8.0: Jóváhagyás (pending_approval → awaiting_shipment)
+        if new_status_value == 'awaiting_shipment' and current_user.role == 'company_admin' and old_status_value == 'pending_approval':
             req.approved_by = current_user.id
             req.approved_at = datetime.datetime.utcnow()
             
-            create_notification(
-                req.user_id,
-                req.id,
-                'approved',
-                f'A céges admin jóváhagyta a laborkérésedet: {req.sample_id}'
-            )
-            
-            # Értesítés logisztikai munkatársaknak
-            logistics_users = User.query.filter(
-                User.role.in_(['university_logistics', 'company_logistics'])
-            ).all()
-            for logistics_user in logistics_users:
-                # Company logistics csak saját cég kéréseiről
-                if logistics_user.role == 'company_logistics' and logistics_user.company_id != req.company_id:
-                    continue
-                create_notification(
-                    logistics_user.id,
-                    req.id,
-                    'awaiting_shipment',
-                    f'Új kérés szállításra vár: {req.request_number} ({req.company.name})'
-                )
-        
-        # Legacy support: submitted → arrived_at_provider (átnevezés)
-        if data['status'] == 'submitted':
-            data['status'] = 'arrived_at_provider'
-        
-        # v7.0.27: arrived_at_provider → értesítés adminoknak
-        if data['status'] == 'arrived_at_provider' and old_status == 'in_transit':
-            super_admins = User.query.filter_by(role='super_admin').all()
-            for admin in super_admins:
-                create_notification(
-                    admin.id,
-                    req.id,
-                    'arrived',
-                    f'Új laborkérés megérkezett: {req.request_number} ({req.company.name})'
-                )
-        
-        # v6.1: Notifications for all university admin status changes
-        if data['status'] != old_status and current_user.role in ['super_admin', 'labor_staff']:  # v7.0.1: lab_staff → labor_staff
-            # Notify company admins
-            company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
-            for admin in company_admins:
-                create_notification(
-                    admin.id,
-                    req.id,
-                    'status_change',
-                    f'Státuszváltozás: {req.sample_id} → {data["status"]}'
-                )
-            
-            # Notify requester
-            create_notification(
-                req.user_id,
-                req.id,
-                'status_change',
-                f'Státuszváltozás: {req.sample_id} → {data["status"]}'
-            )
-        
-        # v7.0.27: in_progress notification (arrived_at_provider után)
-        if data['status'] == 'in_progress' and old_status in ['arrived_at_provider', 'submitted']:  # submitted: legacy support
-            company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
-            for admin in company_admins:
-                create_notification(
-                    admin.id,
-                    req.id,
-                    'accepted',
-                    f'Az egyetemi admin befogadta a laborkérést: {req.sample_id}'
-                )
-            
-            create_notification(
-                req.user_id,
-                req.id,
-                'accepted',
-                f'Az egyetemi admin befogadta a laborkérésedet: {req.sample_id}'
-            )
+            approval_data = {
+                'request_number': req.request_number,
+                'approver_name': current_user.name,
+                'company_name': req.company.name if req.company else ''
+            }
+            NotificationService.notify('request_approved', request_id=req.id, event_data=approval_data)
     
     if 'sample_id' in data:
         req.sample_id = data['sample_id']
@@ -1824,15 +1731,15 @@ def submit_for_validation(current_user, request_id):
     
     db.session.commit()
     
-    # Értesítés az adminoknak
-    admins = User.query.filter_by(role='super_admin').all()
-    for admin in admins:
-        create_notification(
-            admin.id,
-            req.id,
-            'validation_pending',
-            f'Új validálásra váró kérés: {req.request_number}'
-        )
+    # v8.0: Státuszváltozás notification
+    event_data = {
+        'request_number': req.request_number,
+        'old_status': old_status,
+        'new_status': 'validation_pending',
+        'company_name': req.company.name if req.company else '',
+        'requester_name': req.user.name
+    }
+    NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
     
     return jsonify({
         'message': 'Kérés validálásra küldve!',
@@ -1910,33 +1817,19 @@ def complete_request_validation(current_user, request_id):
         }), 400
     
     # Összes vizsgálat validált → Kérés lezárása
+    old_status = req.status
     req.status = 'completed'
     db.session.commit()
     
-    # Értesítés a feladónak
-    create_notification(
-        req.user_id,
-        req.id,
-        'completed',
-        f'A laborkérés elkészült: {req.request_number}'
-    )
-    
-    # v7.0.6: Értesítés a cég adminjának is
-    requester = User.query.get(req.user_id)
-    if requester and requester.company_id:
-        # Keressük meg a cég adminját
-        company_admin = User.query.filter_by(
-            company_id=requester.company_id,
-            role='company_admin'
-        ).first()
-        
-        if company_admin and company_admin.id != req.user_id:
-            create_notification(
-                company_admin.id,
-                req.id,
-                'completed',
-                f'Laborkérés elkészült: {req.request_number} ({requester.name})'
-            )
+    # v8.0: Státuszváltozás notification
+    event_data = {
+        'request_number': req.request_number,
+        'old_status': old_status,
+        'new_status': 'completed',
+        'company_name': req.company.name if req.company else '',
+        'requester_name': req.user.name
+    }
+    NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
     
     return jsonify({
         'message': 'Kérés sikeresen lezárva!',
@@ -2694,41 +2587,15 @@ def update_logistics_status(current_user, request_id):
     req.updated_at = datetime.datetime.utcnow()
     db.session.commit()
     
-    # Értesítések
-    status_names = {
-        'in_transit': 'Szállítás alatt',
-        'arrived_at_provider': 'Szolgáltatóhoz megérkezett'
+    # v8.0: Státuszváltozás notification
+    event_data = {
+        'request_number': req.request_number,
+        'old_status': old_status,
+        'new_status': new_status,
+        'company_name': req.company.name if req.company else '',
+        'requester_name': req.user.name
     }
-    
-    # Értesítés a cég adminjának
-    if req.company_id:
-        company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
-        for admin in company_admins:
-            create_notification(
-                admin.id,
-                req.id,
-                'status_change',
-                f'Logisztikai státusz változás: {req.request_number} → {status_names.get(new_status, new_status)}'
-            )
-    
-    # Értesítés a kérés tulajdonosának
-    create_notification(
-        req.user_id,
-        req.id,
-        'status_change',
-        f'Logisztikai státusz változás: {req.request_number} → {status_names.get(new_status, new_status)}'
-    )
-    
-    # Ha megérkezett a szolgáltatóhoz, értesítés az adminoknak
-    if new_status == 'arrived_at_provider':
-        admins = User.query.filter_by(role='super_admin').all()
-        for admin in admins:
-            create_notification(
-                admin.id,
-                req.id,
-                'arrived',
-                f'Új kérés érkezett: {req.request_number} ({req.company.name if req.company else ""})'
-            )
+    NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
     
     return jsonify({
         'message': 'Státusz sikeresen frissítve!',
@@ -2780,25 +2647,15 @@ def scan_qr_code(current_user):
     req.updated_at = datetime.datetime.utcnow()
     db.session.commit()
     
-    # Értesítések
-    # Company admin
-    if req.company_id:
-        company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
-        for admin in company_admins:
-            create_notification(
-                admin.id,
-                req.id,
-                'in_transit',
-                f'Szállítás megkezdve: {req.request_number}'
-            )
-    
-    # Requester
-    create_notification(
-        req.user_id,
-        req.id,
-        'in_transit',
-        f'Mintád szállítás alatt: {req.request_number}'
-    )
+    # v8.0: Státuszváltozás notification
+    event_data = {
+        'request_number': req.request_number,
+        'old_status': old_status,
+        'new_status': 'in_transit',
+        'company_name': req.company.name if req.company else '',
+        'requester_name': req.user.name
+    }
+    NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
     
     return jsonify({
         'success': True,
@@ -2809,6 +2666,288 @@ def scan_qr_code(current_user):
     }), 200
 
 # v7.0.27: === END LOGISTICS MODULE ===
+
+# v8.0: === NOTIFICATION MODULE ===
+
+# User notification endpoints
+@app.route('/api/notifications', methods=['GET'])
+@token_required
+def get_notifications(current_user):
+    """User notifications lekérése"""
+    unread_only = request.args.get('unread_only', 'false').lower() == 'true'
+    limit = int(request.args.get('limit', 50))
+    
+    notifications = NotificationService.get_user_notifications(
+        current_user.id, unread_only=unread_only, limit=limit
+    )
+    
+    return jsonify({
+        'notifications': notifications,
+        'unread_count': NotificationService.get_unread_count(current_user.id)
+    })
+
+@app.route('/api/notifications/<int:notification_id>/read', methods=['PUT'])
+@token_required
+def mark_notification_read(current_user, notification_id):
+    """Notification olvasottnak jelölése"""
+    NotificationService.mark_as_read(notification_id, current_user.id)
+    return jsonify({'message': 'Értesítés olvasottnak jelölve!'})
+
+@app.route('/api/notifications/read-all', methods=['PUT'])
+@token_required
+def mark_all_notifications_read(current_user):
+    """Összes notification olvasottnak jelölése"""
+    NotificationService.mark_all_as_read(current_user.id)
+    return jsonify({'message': 'Összes értesítés olvasottnak jelölve!'})
+
+@app.route('/api/notifications/<int:notification_id>', methods=['DELETE'])
+@token_required
+def delete_notification(current_user, notification_id):
+    """Notification törlése"""
+    NotificationService.delete_notification(notification_id, current_user.id)
+    return jsonify({'message': 'Értesítés törölve!'})
+
+# Admin notification management endpoints
+@app.route('/api/admin/notification-event-types', methods=['GET'])
+@token_required
+@role_required('super_admin')
+def get_notification_event_types(current_user):
+    """Notification event típusok listája"""
+    cursor = db.session.execute("""
+        SELECT id, event_key, event_name, description, available_variables
+        FROM notification_event_types
+        ORDER BY id
+    """)
+    
+    events = []
+    for row in cursor:
+        events.append({
+            'id': row[0],
+            'event_key': row[1],
+            'event_name': row[2],
+            'description': row[3],
+            'available_variables': json.loads(row[4]) if row[4] else []
+        })
+    
+    return jsonify({'event_types': events})
+
+@app.route('/api/admin/notification-rules', methods=['GET'])
+@token_required
+@role_required('super_admin')
+def get_notification_rules(current_user):
+    """Notification rules listája"""
+    cursor = db.session.execute("""
+        SELECT nr.id, nr.event_type_id, net.event_name, net.event_key,
+               nr.role, nr.event_filter, nr.in_app_enabled, nr.email_enabled,
+               nr.email_template_id, nt.name as template_name,
+               nr.priority, nr.is_active
+        FROM notification_rules nr
+        JOIN notification_event_types net ON nr.event_type_id = net.id
+        LEFT JOIN notification_templates nt ON nr.email_template_id = nt.id
+        ORDER BY nr.event_type_id, nr.priority DESC, nr.role
+    """)
+    
+    rules = []
+    for row in cursor:
+        rules.append({
+            'id': row[0],
+            'event_type_id': row[1],
+            'event_name': row[2],
+            'event_key': row[3],
+            'role': row[4],
+            'event_filter': json.loads(row[5]) if row[5] else None,
+            'in_app_enabled': bool(row[6]),
+            'email_enabled': bool(row[7]),
+            'email_template_id': row[8],
+            'email_template_name': row[9],
+            'priority': row[10],
+            'is_active': bool(row[11])
+        })
+    
+    return jsonify({'rules': rules})
+
+@app.route('/api/admin/notification-rules', methods=['POST'])
+@token_required
+@role_required('super_admin')
+def create_notification_rule(current_user):
+    """Notification rule létrehozása"""
+    data = request.get_json()
+    
+    cursor = db.session.execute("""
+        INSERT INTO notification_rules 
+        (event_type_id, role, event_filter, in_app_enabled, email_enabled, 
+         email_template_id, priority, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        data['event_type_id'],
+        data['role'],
+        json.dumps(data.get('event_filter')) if data.get('event_filter') else None,
+        data.get('in_app_enabled', True),
+        data.get('email_enabled', False),
+        data.get('email_template_id'),
+        data.get('priority', 0),
+        data.get('is_active', True)
+    ))
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Értesítési szabály létrehozva!',
+        'id': cursor.lastrowid
+    }), 201
+
+@app.route('/api/admin/notification-rules/<int:rule_id>', methods=['PUT'])
+@token_required
+@role_required('super_admin')
+def update_notification_rule(current_user, rule_id):
+    """Notification rule frissítése"""
+    data = request.get_json()
+    
+    db.session.execute("""
+        UPDATE notification_rules
+        SET event_type_id = ?,
+            role = ?,
+            event_filter = ?,
+            in_app_enabled = ?,
+            email_enabled = ?,
+            email_template_id = ?,
+            priority = ?,
+            is_active = ?,
+            updated_at = ?
+        WHERE id = ?
+    """, (
+        data['event_type_id'],
+        data['role'],
+        json.dumps(data.get('event_filter')) if data.get('event_filter') else None,
+        data.get('in_app_enabled', True),
+        data.get('email_enabled', False),
+        data.get('email_template_id'),
+        data.get('priority', 0),
+        data.get('is_active', True),
+        datetime.datetime.utcnow(),
+        rule_id
+    ))
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'Értesítési szabály frissítve!'})
+
+@app.route('/api/admin/notification-rules/<int:rule_id>', methods=['DELETE'])
+@token_required
+@role_required('super_admin')
+def delete_notification_rule(current_user, rule_id):
+    """Notification rule törlése"""
+    db.session.execute("DELETE FROM notification_rules WHERE id = ?", (rule_id,))
+    db.session.commit()
+    
+    return jsonify({'message': 'Értesítési szabály törölve!'})
+
+@app.route('/api/admin/notification-templates', methods=['GET'])
+@token_required
+@role_required('super_admin')
+def get_notification_templates(current_user):
+    """Email template-ek listája"""
+    cursor = db.session.execute("""
+        SELECT nt.id, nt.name, nt.event_type_id, net.event_name,
+               nt.subject, nt.body, nt.variables_used,
+               nt.created_at, nt.updated_at
+        FROM notification_templates nt
+        JOIN notification_event_types net ON nt.event_type_id = net.id
+        ORDER BY nt.event_type_id, nt.name
+    """)
+    
+    templates = []
+    for row in cursor:
+        templates.append({
+            'id': row[0],
+            'name': row[1],
+            'event_type_id': row[2],
+            'event_name': row[3],
+            'subject': row[4],
+            'body': row[5],
+            'variables_used': json.loads(row[6]) if row[6] else [],
+            'created_at': row[7],
+            'updated_at': row[8]
+        })
+    
+    return jsonify({'templates': templates})
+
+@app.route('/api/admin/notification-templates', methods=['POST'])
+@token_required
+@role_required('super_admin')
+def create_notification_template(current_user):
+    """Email template létrehozása"""
+    data = request.get_json()
+    
+    cursor = db.session.execute("""
+        INSERT INTO notification_templates 
+        (name, event_type_id, subject, body, variables_used)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        data['name'],
+        data['event_type_id'],
+        data['subject'],
+        data['body'],
+        json.dumps(data.get('variables_used', []))
+    ))
+    
+    db.session.commit()
+    
+    return jsonify({
+        'message': 'Email sablon létrehozva!',
+        'id': cursor.lastrowid
+    }), 201
+
+@app.route('/api/admin/notification-templates/<int:template_id>', methods=['PUT'])
+@token_required
+@role_required('super_admin')
+def update_notification_template(current_user, template_id):
+    """Email template frissítése"""
+    data = request.get_json()
+    
+    db.session.execute("""
+        UPDATE notification_templates
+        SET name = ?,
+            event_type_id = ?,
+            subject = ?,
+            body = ?,
+            variables_used = ?,
+            updated_at = ?
+        WHERE id = ?
+    """, (
+        data['name'],
+        data['event_type_id'],
+        data['subject'],
+        data['body'],
+        json.dumps(data.get('variables_used', [])),
+        datetime.datetime.utcnow(),
+        template_id
+    ))
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'Email sablon frissítve!'})
+
+@app.route('/api/admin/notification-templates/<int:template_id>', methods=['DELETE'])
+@token_required
+@role_required('super_admin')
+def delete_notification_template(current_user, template_id):
+    """Email template törlése"""
+    # Ellenőrzés: van-e használatban
+    cursor = db.session.execute("""
+        SELECT COUNT(*) FROM notification_rules WHERE email_template_id = ?
+    """, (template_id,))
+    
+    count = cursor.fetchone()[0]
+    if count > 0:
+        return jsonify({'message': f'A sablon {count} szabályban használatban van! Először töröld a szabályokat.'}), 400
+    
+    db.session.execute("DELETE FROM notification_templates WHERE id = ?", (template_id,))
+    db.session.commit()
+    
+    return jsonify({'message': 'Email sablon törölve!'})
+
+# v8.0: === END NOTIFICATION MODULE ===
 
 # --- Stats Route ---
 @app.route('/api/stats', methods=['GET'])

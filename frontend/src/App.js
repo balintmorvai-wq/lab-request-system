@@ -13,6 +13,7 @@ import WorkList from './components/WorkList';  // v7.0
 import TestResultsPanel from './components/TestResultsPanel';  // v7.0
 import Logistics from './components/Logistics';  // v7.0.27
 import QRScanner from './components/QRScanner';  // v7.0.31
+import NotificationManagement from './components/NotificationManagement';  // v8.0
 import Layout from './components/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -97,6 +98,16 @@ function AppRoutes() {
           element={
             <PrivateRoute allowedRoles={['super_admin']}>
               <CompanyManagement />
+            </PrivateRoute>
+          } 
+        />
+        
+        {/* v8.0: Értesítések kezelése */}
+        <Route 
+          path="notifications" 
+          element={
+            <PrivateRoute allowedRoles={['super_admin']}>
+              <NotificationManagement />
             </PrivateRoute>
           } 
         />
