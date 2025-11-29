@@ -15,7 +15,9 @@ import {
   Eye,
   Download,
   Trash2,
-  Clipboard  // v7.0.4 FINAL: Munkalista ikon
+  Clipboard,  // v7.0.4 FINAL: Munkalista ikon
+  Package,  // v7.0.27: Logistics icon
+  Truck  // v7.0.27: Logistics icon
 } from 'lucide-react';
 
 function Dashboard() {
@@ -218,9 +220,7 @@ function Dashboard() {
                     <p className="text-3xl font-bold text-orange-600 group-hover:text-orange-700">{stats?.by_status?.awaiting_shipment || 0}</p>
                   </div>
                   <div className="bg-orange-100 rounded-full p-3 border-2 border-orange-200 group-hover:bg-orange-200 transition-colors">
-                    <svg className="w-6 h-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                    </svg>
+                    <Package className="w-6 h-6 text-orange-600" />
                   </div>
                 </div>
               </button>
@@ -236,9 +236,7 @@ function Dashboard() {
                     <p className="text-3xl font-bold text-blue-600 group-hover:text-blue-700">{stats?.by_status?.in_transit || 0}</p>
                   </div>
                   <div className="bg-blue-100 rounded-full p-3 border-2 border-blue-200 group-hover:bg-blue-200 transition-colors">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-                    </svg>
+                    <Truck className="w-6 h-6 text-blue-600" />
                   </div>
                 </div>
               </button>
