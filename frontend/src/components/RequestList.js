@@ -245,11 +245,6 @@ function RequestList() {
       color: 'bg-green-100 text-green-800',
       icon: CheckCircle
     },
-    submitted: {  // Legacy support - átirányítás arrived_at_provider-re
-      label: 'Szolgáltatóhoz megérkezett',
-      color: 'bg-green-100 text-green-800',
-      icon: CheckCircle
-    },
     in_progress: { 
       label: 'Végrehajtás alatt', 
       color: 'bg-yellow-100 text-yellow-800',
