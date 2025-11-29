@@ -454,40 +454,8 @@ def delete_category(current_user, category_id):
     db.session.commit()
     return jsonify({'message': 'Kategória törölve!'})
 
-# --- Notifications Routes ---
-@app.route('/api/notifications', methods=['GET'])
-@token_required
-def get_notifications(current_user):
-    notifications = Notification.query.filter_by(user_id=current_user.id).order_by(Notification.created_at.desc()).limit(50).all()
-    
-    return jsonify([{
-        'id': n.id,
-        'request_id': n.request_id,
-        'sample_id': n.lab_request.sample_id,
-        'type': n.type,
-        'message': n.message,
-        'is_read': n.is_read,
-        'created_at': n.created_at.isoformat()
-    } for n in notifications])
-
-@app.route('/api/notifications/<int:notif_id>/read', methods=['PUT'])
-@token_required
-def mark_notification_read(current_user, notif_id):
-    notification = Notification.query.get_or_404(notif_id)
-    
-    if notification.user_id != current_user.id:
-        return jsonify({'message': 'Nincs jogosultságod!'}), 403
-    
-    notification.is_read = True
-    db.session.commit()
-    
-    return jsonify({'message': 'Értesítés megjelölve olvasottként'})
-
-@app.route('/api/notifications/read-all', methods=['PUT'])
-@token_required
-def mark_all_notifications_read(current_user):
-    Notification.query.filter_by(user_id=current_user.id, is_read=False).update({'is_read': True})
-    db.session.commit()
+# --- OLD Notifications Routes REMOVED (v8.0) ---
+# Replaced with new NotificationService API at line 2670+
 
 @app.route('/api/admin/reseed', methods=['POST'])
 @token_required
