@@ -10,7 +10,7 @@ function Logistics() {
   
   // Szűrők
   const [filter, setFilter] = useState('all');
-  const [logisticsFilter, setLogisticsFilter] = useState('all'); // 'all', 'sender', 'laboratory'
+  const [logisticsFilter, setLogisticsFilter] = useState('all'); // 'all', 'sender', 'provider'
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -87,17 +87,33 @@ function Logistics() {
   };
 
   // Logistics type config
+  // v7.0.30: 'laboratory' → 'provider' (backend kompatibilitás)
   const logisticsTypeConfig = {
     sender: {
       label: 'Feladó intézi',
       icon: User,
       color: 'bg-purple-100 text-purple-700'
     },
-    laboratory: {
-      label: 'Labor intézi',
+    provider: {  // Backend: 'provider' (NEM 'laboratory'!)
+      label: 'Szolgáltató intézi',
       icon: Truck,
       color: 'bg-indigo-100 text-indigo-700'
     }
+  };
+
+  // v7.0.30: Fallback config undefined státusz/logistics_type esetére
+  const fallbackStatusConfig = {
+    label: 'Ismeretlen státusz',
+    color: 'bg-gray-100 text-gray-800',
+    icon: AlertCircle,
+    nextStatus: null,
+    nextLabel: null
+  };
+
+  const fallbackLogisticsConfig = {
+    label: 'Nincs megadva',
+    icon: Package,
+    color: 'bg-gray-100 text-gray-700'
   };
 
   // Stats számítás státuszonként (simple count only)
@@ -275,14 +291,14 @@ function Logistics() {
                 Feladó intézi
               </button>
               <button
-                onClick={() => setLogisticsFilter('laboratory')}
+                onClick={() => setLogisticsFilter('provider')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  logisticsFilter === 'laboratory'
+                  logisticsFilter === 'provider'
                     ? 'bg-indigo-600 text-white shadow-md'
                     : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-indigo-300'
                 }`}
               >
-                Labor intézi
+                Szolgáltató intézi
               </button>
             </div>
           </div>
@@ -300,8 +316,9 @@ function Logistics() {
         ) : (
           <div className="divide-y divide-gray-200">
             {filteredLogistics.map((req) => {
-              const statusInfo = statusConfig[req.status];
-              const logisticsInfo = logisticsTypeConfig[req.logistics_type];
+              // v7.0.30: Fallback config használata undefined esetén (crash fix)
+              const statusInfo = statusConfig[req.status] || fallbackStatusConfig;
+              const logisticsInfo = logisticsTypeConfig[req.logistics_type] || fallbackLogisticsConfig;
               const StatusIcon = statusInfo.icon;
               const LogisticsIcon = logisticsInfo.icon;
 
