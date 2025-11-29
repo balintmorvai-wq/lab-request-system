@@ -134,7 +134,9 @@ function UserManagement() {
     'super_admin': 'Egyetemi adminisztrátor',
     'labor_staff': 'Labor munkatárs',
     'company_admin': 'Cég adminisztrátor',
-    'company_user': 'Cég felhasználó'
+    'company_user': 'Cég felhasználó',
+    'company_logistics': 'Céges logisztikai munkatárs',  // v7.0.27
+    'university_logistics': 'Egyetemi logisztikai munkatárs'  // v7.0.27
   };
 
   const filteredUsers = users.filter(u => 
@@ -234,6 +236,8 @@ function UserManagement() {
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       u.role === 'super_admin' ? 'bg-purple-100 text-purple-800' :
                       u.role === 'labor_staff' ? 'bg-blue-100 text-blue-800' :
+                      u.role === 'university_logistics' ? 'bg-indigo-100 text-indigo-800' :
+                      u.role === 'company_logistics' ? 'bg-orange-100 text-orange-800' :
                       u.role === 'company_admin' ? 'bg-green-100 text-green-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
@@ -354,7 +358,9 @@ function UserManagement() {
                 >
                   <option value="company_user">Cég felhasználó</option>
                   <option value="company_admin">Cég adminisztrátor</option>
+                  <option value="company_logistics">Céges logisztikai munkatárs</option>
                   <option value="labor_staff">Labor munkatárs</option>
+                  <option value="university_logistics">Egyetemi logisztikai munkatárs</option>
                   <option value="super_admin">Egyetemi adminisztrátor</option>
                 </select>
               </div>
@@ -385,7 +391,7 @@ function UserManagement() {
               )}
 
               {/* Company select for company roles */}
-              {(formData.role === 'company_admin' || formData.role === 'company_user') && (
+              {(formData.role === 'company_admin' || formData.role === 'company_user' || formData.role === 'company_logistics') && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Cég</label>
                   <select

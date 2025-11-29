@@ -200,28 +200,74 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* MÁSODIK SOR: SZOLGÁLTATÓ STÁTUSZOK (submitted, in_progress, validation_pending, completed) */}
+          {/* v7.0.27: MÁSODIK SOR: LOGISZTIKAI STÁTUSZOK */}
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-1 w-8 bg-gradient-to-r from-orange-500 to-orange-600 rounded"></div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">🚚 Logisztika</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Szállításra vár */}
+              <button
+                onClick={() => navigate('/logistics?status=awaiting_shipment')}
+                className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-orange-400 group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Szállításra vár</p>
+                    <p className="text-3xl font-bold text-orange-600 group-hover:text-orange-700">{stats?.by_status?.awaiting_shipment || 0}</p>
+                  </div>
+                  <div className="bg-orange-100 rounded-full p-3 border-2 border-orange-200 group-hover:bg-orange-200 transition-colors">
+                    <svg className="w-6 h-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                  </div>
+                </div>
+              </button>
+
+              {/* Szállítás alatt */}
+              <button
+                onClick={() => navigate('/logistics?status=in_transit')}
+                className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-blue-400 group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Szállítás alatt</p>
+                    <p className="text-3xl font-bold text-blue-600 group-hover:text-blue-700">{stats?.by_status?.in_transit || 0}</p>
+                  </div>
+                  <div className="bg-blue-100 rounded-full p-3 border-2 border-blue-200 group-hover:bg-blue-200 transition-colors">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                    </svg>
+                  </div>
+                </div>
+              </button>
+
+              {/* Szolgáltatóhoz megérkezett */}
+              <button
+                onClick={() => navigate('/logistics?status=arrived_at_provider')}
+                className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-green-400 group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Szolgáltatóhoz megérkezett</p>
+                    <p className="text-3xl font-bold text-green-600 group-hover:text-green-700">{stats?.by_status?.arrived_at_provider || 0}</p>
+                  </div>
+                  <div className="bg-green-100 rounded-full p-3 border-2 border-green-200 group-hover:bg-green-200 transition-colors">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
+                  </div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* HARMADIK SOR: SZOLGÁLTATÓ STÁTUSZOK (in_progress, validation_pending, completed) */}
           <div>
             <div className="flex items-center gap-2 mb-3">
               <div className="h-1 w-8 bg-gradient-to-r from-indigo-500 to-indigo-600 rounded"></div>
               <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">🔬 Szolgáltató oldal (Labor)</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Submitted */}
-              <button
-                onClick={() => navigate('/requests?status=submitted')}
-                className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-all text-left w-full border-2 border-gray-200 hover:border-blue-400 group"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">Szolgáltatóhoz beküldve</p>
-                    <p className="text-3xl font-bold text-blue-600 group-hover:text-blue-700">{stats?.by_status?.submitted || 0}</p>
-                  </div>
-                  <div className="bg-blue-100 rounded-full p-3 border-2 border-blue-200 group-hover:bg-blue-200 transition-colors">
-                    <Clock className="w-6 h-6 text-blue-600" />
-                  </div>
-                </div>
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{/* v7.0.27: 4 → 3 oszlop (submitted kikerül) */}
 
               {/* In Progress */}
               <button

@@ -160,7 +160,8 @@ function RequestList() {
     if (!window.confirm('Biztosan jóváhagyod és beküldöd ezt a laborkérést?')) {
       return;
     }
-    await updateStatus(requestId, 'submitted');
+    // v7.0.27: pending_approval → awaiting_shipment (logisztikai modul)
+    await updateStatus(requestId, 'awaiting_shipment');
   };
 
   const rejectRequest = async (requestId) => {
@@ -202,17 +203,33 @@ function RequestList() {
       color: 'bg-orange-100 text-orange-800',
       icon: Clock 
     },
-    submitted: { 
-      label: 'Szolgáltatóhoz beküldve', 
+    // v7.0.27: Logisztikai státuszok
+    awaiting_shipment: {
+      label: 'Szállításra vár',
+      color: 'bg-orange-100 text-orange-800',
+      icon: Clock
+    },
+    in_transit: {
+      label: 'Szállítás alatt',
       color: 'bg-blue-100 text-blue-800',
-      icon: FileText 
+      icon: Clock
+    },
+    arrived_at_provider: {  // v7.0.27: submitted átnevezve
+      label: 'Szolgáltatóhoz megérkezett',
+      color: 'bg-green-100 text-green-800',
+      icon: CheckCircle
+    },
+    submitted: {  // Legacy support - átirányítás arrived_at_provider-re
+      label: 'Szolgáltatóhoz megérkezett',
+      color: 'bg-green-100 text-green-800',
+      icon: CheckCircle
     },
     in_progress: { 
       label: 'Végrehajtás alatt', 
       color: 'bg-yellow-100 text-yellow-800',
       icon: Clock 
     },
-    awaiting_other_departments: {
+    awaiting_other_departments: {  // v7.0.26: Törölt de legacy support
       label: 'Másik szervezeti egységre vár',
       color: 'bg-orange-100 text-orange-800',
       icon: Clock

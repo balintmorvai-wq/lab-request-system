@@ -205,6 +205,8 @@ class LabRequest(db.Model):
     attachment_filename = db.Column(db.String(200))
     
     # Státusz és workflow
+    # v7.0.27: Logisztikai modul - új státuszok
+    # Workflow: draft → pending_approval → awaiting_shipment → in_transit → arrived_at_provider → in_progress → validation_pending → completed
     status = db.Column(db.String(50), default='draft')
     approved_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     approved_at = db.Column(db.DateTime)
@@ -1021,9 +1023,9 @@ def get_requests(current_user):
     if current_user.role == 'super_admin':
         requests = LabRequest.query.all()
     elif current_user.role == 'labor_staff':
-        # v7.0: Labor staff csak in_progress, validation_pending, completed státuszokat lát
+        # v7.0.27: Labor staff in_progress, validation_pending, completed ÉS arrived_at_provider (logisztikai)
         requests = LabRequest.query.filter(
-            LabRequest.status.in_(['in_progress', 'validation_pending', 'completed'])
+            LabRequest.status.in_(['arrived_at_provider', 'in_progress', 'validation_pending', 'completed'])
         ).all()
     elif current_user.role == 'company_admin':
         requests = LabRequest.query.filter_by(company_id=current_user.company_id).all()
@@ -1263,7 +1265,8 @@ def update_request(current_user, request_id):
                         f'{current_user.name} beküldött egy laborkérést jóváhagyásra: {req.sample_id}'
                     )
         
-        if data['status'] == 'submitted' and current_user.role == 'company_admin' and old_status == 'pending_approval':
+        # v7.0.27: Company approval → awaiting_shipment (logisztikai modul)
+        if data['status'] == 'awaiting_shipment' and current_user.role == 'company_admin' and old_status == 'pending_approval':
             req.approved_by = current_user.id
             req.approved_at = datetime.datetime.utcnow()
             
@@ -1274,13 +1277,34 @@ def update_request(current_user, request_id):
                 f'A céges admin jóváhagyta a laborkérésedet: {req.sample_id}'
             )
             
+            # Értesítés logisztikai munkatársaknak
+            logistics_users = User.query.filter(
+                User.role.in_(['university_logistics', 'company_logistics'])
+            ).all()
+            for logistics_user in logistics_users:
+                # Company logistics csak saját cég kéréseiről
+                if logistics_user.role == 'company_logistics' and logistics_user.company_id != req.company_id:
+                    continue
+                create_notification(
+                    logistics_user.id,
+                    req.id,
+                    'awaiting_shipment',
+                    f'Új kérés szállításra vár: {req.request_number} ({req.company.name})'
+                )
+        
+        # Legacy support: submitted → arrived_at_provider (átnevezés)
+        if data['status'] == 'submitted':
+            data['status'] = 'arrived_at_provider'
+        
+        # v7.0.27: arrived_at_provider → értesítés adminoknak
+        if data['status'] == 'arrived_at_provider' and old_status == 'in_transit':
             super_admins = User.query.filter_by(role='super_admin').all()
             for admin in super_admins:
                 create_notification(
                     admin.id,
                     req.id,
-                    'submitted',
-                    f'Új laborkérés érkezett: {req.sample_id} ({req.company.name})'
+                    'arrived',
+                    f'Új laborkérés megérkezett: {req.request_number} ({req.company.name})'
                 )
         
         # v6.1: Notifications for all university admin status changes
@@ -1303,8 +1327,8 @@ def update_request(current_user, request_id):
                 f'Státuszváltozás: {req.sample_id} → {data["status"]}'
             )
         
-        # Legacy notification for in_progress (keep for backwards compatibility)
-        if data['status'] == 'in_progress' and old_status == 'submitted':
+        # v7.0.27: in_progress notification (arrived_at_provider után)
+        if data['status'] == 'in_progress' and old_status in ['arrived_at_provider', 'submitted']:  # submitted: legacy support
             company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
             for admin in company_admins:
                 create_notification(
@@ -2322,6 +2346,156 @@ def update_user(current_user, user_id):
     db.session.commit()
     
     return jsonify({'message': 'Felhasználó sikeresen frissítve!'})
+
+# v7.0.27: === LOGISTICS MODULE ENDPOINTS ===
+
+@app.route('/api/logistics', methods=['GET'])
+@token_required
+def get_logistics_requests(current_user):
+    """
+    Logisztikai modul - szállításra váró, szállítás alatt, szolgáltatóhoz megérkezett kérések
+    
+    Jogosultságok:
+    - super_admin: minden kérés
+    - university_logistics: minden kérés
+    - company_logistics: csak saját cég kérései
+    - company_admin: csak saját cég kérései
+    - company_user: csak saját kérései
+    """
+    logistics_statuses = ['awaiting_shipment', 'in_transit', 'arrived_at_provider']
+    
+    if current_user.role in ['super_admin', 'university_logistics']:
+        # Admin és egyetemi logisztika: minden kérés
+        requests = LabRequest.query.filter(
+            LabRequest.status.in_(logistics_statuses)
+        ).all()
+    elif current_user.role in ['company_logistics', 'company_admin']:
+        # Céges logisztika és céges admin: csak saját cég
+        requests = LabRequest.query.filter(
+            LabRequest.company_id == current_user.company_id,
+            LabRequest.status.in_(logistics_statuses)
+        ).all()
+    elif current_user.role == 'company_user':
+        # Céges user: csak saját kérései
+        requests = LabRequest.query.filter(
+            LabRequest.user_id == current_user.id,
+            LabRequest.status.in_(logistics_statuses)
+        ).all()
+    else:
+        # Labor staff nincs jogosultsága
+        return jsonify({'message': 'Nincs jogosultságod ehhez a modulhoz!'}), 403
+    
+    return jsonify([{
+        'id': req.id,
+        # Azonosítók
+        'request_number': req.request_number,
+        'internal_id': req.internal_id,
+        # Minta
+        'sample_description': req.sample_description,
+        'sampling_datetime': req.sampling_datetime.isoformat() if req.sampling_datetime else None,
+        'sampling_location': req.sampling_location,
+        # Feladás - LOGISZTIKAI INFO
+        'logistics_type': req.logistics_type,  # 'sender' vagy 'laboratory'
+        'shipping_address': req.shipping_address,
+        'contact_person': req.contact_person,
+        'contact_phone': req.contact_phone,
+        # Vizsgálatok
+        'test_types': get_test_type_details(req.test_types),
+        'total_price': req.total_price,
+        # Prioritás
+        'urgency': req.urgency,
+        'deadline': req.deadline.isoformat() if req.deadline else None,
+        # Státusz
+        'status': req.status,
+        # Egyéb
+        'special_instructions': req.special_instructions,
+        'created_at': req.created_at.isoformat(),
+        'user_name': req.user.name,
+        'company_name': req.company.name if req.company else None
+    } for req in requests])
+
+
+@app.route('/api/logistics/<int:request_id>/update-status', methods=['PUT'])
+@token_required
+def update_logistics_status(current_user, request_id):
+    """
+    Logisztikai státusz frissítése
+    
+    Engedélyezett átmenetek:
+    - awaiting_shipment → in_transit (logistics indítja szállítást)
+    - in_transit → arrived_at_provider (logistics jelzi megérkezést)
+    """
+    if current_user.role not in ['super_admin', 'university_logistics', 'company_logistics']:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    req = LabRequest.query.get_or_404(request_id)
+    data = request.get_json()
+    new_status = data.get('status')
+    
+    # Jogosultság ellenőrzés céges logistics esetén
+    if current_user.role == 'company_logistics' and req.company_id != current_user.company_id:
+        return jsonify({'message': 'Csak saját céged kéréseit módosíthatod!'}), 403
+    
+    # Státusz átmenet ellenőrzés
+    valid_transitions = {
+        'awaiting_shipment': ['in_transit'],
+        'in_transit': ['arrived_at_provider']
+    }
+    
+    if req.status not in valid_transitions:
+        return jsonify({'message': f'Ebből a státuszból ({req.status}) nem lehet logisztikai műveletet végezni!'}), 400
+    
+    if new_status not in valid_transitions[req.status]:
+        return jsonify({'message': f'Érvénytelen státusz átmenet: {req.status} → {new_status}'}), 400
+    
+    old_status = req.status
+    req.status = new_status
+    req.updated_at = datetime.datetime.utcnow()
+    db.session.commit()
+    
+    # Értesítések
+    status_names = {
+        'in_transit': 'Szállítás alatt',
+        'arrived_at_provider': 'Szolgáltatóhoz megérkezett'
+    }
+    
+    # Értesítés a cég adminjának
+    if req.company_id:
+        company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
+        for admin in company_admins:
+            create_notification(
+                admin.id,
+                req.id,
+                'status_change',
+                f'Logisztikai státusz változás: {req.request_number} → {status_names.get(new_status, new_status)}'
+            )
+    
+    # Értesítés a kérés tulajdonosának
+    create_notification(
+        req.user_id,
+        req.id,
+        'status_change',
+        f'Logisztikai státusz változás: {req.request_number} → {status_names.get(new_status, new_status)}'
+    )
+    
+    # Ha megérkezett a szolgáltatóhoz, értesítés az adminoknak
+    if new_status == 'arrived_at_provider':
+        admins = User.query.filter_by(role='super_admin').all()
+        for admin in admins:
+            create_notification(
+                admin.id,
+                req.id,
+                'arrived',
+                f'Új kérés érkezett: {req.request_number} ({req.company.name if req.company else ""})'
+            )
+    
+    return jsonify({
+        'message': 'Státusz sikeresen frissítve!',
+        'status': new_status,
+        'request_number': req.request_number
+    })
+
+# v7.0.27: === END LOGISTICS MODULE ===
 
 # --- Stats Route ---
 @app.route('/api/stats', methods=['GET'])

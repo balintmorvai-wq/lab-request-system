@@ -30,7 +30,9 @@ function Layout() {
     super_admin: 'Super Admin',
     labor_staff: 'Labor munkatárs',  // v7.0.1: lab_staff → labor_staff for consistency
     company_admin: 'Cég Admin',
-    company_user: 'Cég dolgozó'
+    company_user: 'Cég dolgozó',
+    company_logistics: 'Céges logisztika',  // v7.0.27
+    university_logistics: 'Egyetemi logisztika'  // v7.0.27
   };
 
   const renderSuperAdminMenu = () => (
@@ -49,9 +51,10 @@ function Layout() {
             {[
               { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
               { name: 'Laborkérések', href: '/requests', icon: FileText },
-              { name: 'Munkalistám', href: '/worklist', icon: Clipboard }  // v7.0.2: Super admin worklist
+              { name: 'Munkalistám', href: '/worklist', icon: Clipboard },  // v7.0.2: Super admin worklist
+              { name: 'Logisztika', href: '/logistics', icon: 'Truck' }  // v7.0.27: Logistics module
             ].map((item) => {
-              const Icon = item.icon;
+              const Icon = typeof item.icon === 'string' ? null : item.icon;
               const isActive = location.pathname === item.href;
               return (
                 <Link
@@ -62,7 +65,9 @@ function Layout() {
                     isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  <Icon className="w-5 h-5 mr-3" />
+                  {Icon ? <Icon className="w-5 h-5 mr-3" /> : (
+                    item.icon === 'Truck' && <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                  )}
                   {item.name}
                 </Link>
               );
@@ -130,12 +135,17 @@ function Layout() {
       if (user?.role === 'company_admin') {
         navigation.push({ name: 'Felhasználók', href: '/users', icon: Users });
       }
+      
+      // v7.0.27: Logistics menü company_admin és company_user számára
+      if (user?.role === 'company_admin' || user?.role === 'company_user' || user?.role === 'company_logistics' || user?.role === 'university_logistics') {
+        navigation.push({ name: 'Logisztika', href: '/logistics', icon: 'Truck' });
+      }
     }
 
     return (
       <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
         {navigation.map((item) => {
-          const Icon = item.icon;
+          const Icon = typeof item.icon === 'string' ? null : item.icon;
           const isActive = location.pathname === item.href || 
                           (item.href === '/worklist' && location.pathname.startsWith('/test-results'));
           
@@ -148,7 +158,9 @@ function Layout() {
                 isActive ? 'bg-indigo-50 text-indigo-600' : 'text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <Icon className="w-5 h-5 mr-3" />
+              {Icon ? <Icon className="w-5 h-5 mr-3" /> : (
+                item.icon === 'Truck' && <svg className="w-5 h-5 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+              )}
               {item.name}
             </Link>
           );
