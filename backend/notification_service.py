@@ -23,7 +23,7 @@ import json
 import re
 from datetime import datetime
 from flask import current_app
-from models import db, User, LabRequest
+from app import db, User, LabRequest
 
 class NotificationService:
     """Központi értesítési szolgáltatás"""
