@@ -23,7 +23,9 @@ import json
 import re
 from datetime import datetime
 from flask import current_app
-from app import db, User, LabRequest
+
+# LATE IMPORT - db, User, LabRequest csak függvényeken belül!
+# Ezzel elkerüljük a circular import-ot
 
 class NotificationService:
     """Központi értesítési szolgáltatás"""
@@ -42,6 +44,9 @@ class NotificationService:
         Returns:
             dict: Statisztika (in_app_count, email_count)
         """
+        # Late import - circular import elkerülése
+        from app import db, User, LabRequest
+        
         if event_data is None:
             event_data = {}
         
@@ -116,6 +121,9 @@ class NotificationService:
     @staticmethod
     def _determine_target_users(event_type_id, event_data, request_id):
         """Érintett userek meghatározása szabályok alapján"""
+        # Late import - circular import elkerülése
+        from app import db, User, LabRequest
+        
         # Aktív szabályok lekérése
         rules = NotificationService._get_rules_for_event(event_type_id)
         
@@ -151,6 +159,9 @@ class NotificationService:
     @staticmethod
     def _get_rules_for_event(event_type_id):
         """Aktív szabályok lekérése eseményhez"""
+        # Late import - circular import elkerülése
+        from app import db
+        
         cursor = db.session.execute("""
             SELECT role, event_filter, in_app_enabled, email_enabled, 
                    email_template_id, priority
@@ -190,7 +201,10 @@ class NotificationService:
     @staticmethod
     def _create_in_app_notification(user_id, event_type_id, message, link_url, request_id, event_data):
         """In-app notification létrehozása"""
-        db.session.execute("""
+        # Late import - circular import elkerülése
+        from app import db
+        
+db.session.execute("""
             INSERT INTO notifications 
             (user_id, event_type_id, event_data, message, link_url, request_id)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -199,7 +213,10 @@ class NotificationService:
     @staticmethod
     def _send_email_notification(user, event_data, template_id):
         """Email értesítés küldése"""
-        # Template lekérése
+        # Late import - circular import elkerülése
+        from app import db
+        
+# Template lekérése
         cursor = db.session.execute("""
             SELECT subject, body FROM notification_templates WHERE id = ?
         """, (template_id,))
@@ -237,7 +254,10 @@ class NotificationService:
     @staticmethod
     def mark_as_read(notification_id, user_id):
         """Notification olvasottnak jelölése"""
-        db.session.execute("""
+        # Late import - circular import elkerülése
+        from app import db
+        
+db.session.execute("""
             UPDATE notifications 
             SET read_at = ? 
             WHERE id = ? AND user_id = ?
@@ -247,7 +267,10 @@ class NotificationService:
     @staticmethod
     def mark_all_as_read(user_id):
         """Összes notification olvasottnak jelölése"""
-        db.session.execute("""
+        # Late import - circular import elkerülése
+        from app import db
+        
+db.session.execute("""
             UPDATE notifications 
             SET read_at = ? 
             WHERE user_id = ? AND read_at IS NULL
@@ -257,7 +280,10 @@ class NotificationService:
     @staticmethod
     def delete_notification(notification_id, user_id):
         """Notification törlése"""
-        db.session.execute("""
+        # Late import - circular import elkerülése
+        from app import db
+        
+db.session.execute("""
             DELETE FROM notifications 
             WHERE id = ? AND user_id = ?
         """, (notification_id, user_id))
@@ -266,7 +292,10 @@ class NotificationService:
     @staticmethod
     def get_user_notifications(user_id, unread_only=False, limit=50):
         """User notifikációi"""
-        query = """
+        # Late import - circular import elkerülése
+        from app import db
+        
+query = """
             SELECT n.id, n.event_type_id, net.event_name, n.message, 
                    n.link_url, n.read_at, n.created_at, n.request_id
             FROM notifications n
@@ -302,7 +331,10 @@ class NotificationService:
     @staticmethod
     def get_unread_count(user_id):
         """Olvasatlan notifikációk száma"""
-        cursor = db.session.execute("""
+        # Late import - circular import elkerülése
+        from app import db
+        
+cursor = db.session.execute("""
             SELECT COUNT(*) FROM notifications 
             WHERE user_id = ? AND read_at IS NULL
         """, (user_id,))
