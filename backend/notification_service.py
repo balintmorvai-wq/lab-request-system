@@ -25,7 +25,7 @@ from datetime import datetime
 from flask import current_app
 
 # LATE IMPORT - db, User, LabRequest csak függvényeken belül!
-# Ezzel elkerüljük a circular import-ot
+# Ezzel elkerüljük a circular import-ot (app.py imports notification_service)
 
 class NotificationService:
     """Központi értesítési szolgáltatás"""
@@ -63,18 +63,11 @@ class NotificationService:
         
         event_type_id, event_name = event_type
         
-        # Request link generálása
-        frontend_url = current_app.config.get('FRONTEND_URL', 'https://lab-request-frontend.netlify.app')
-        request_link = f"{frontend_url}/requests" if request_id is None else f"{frontend_url}/requests?id={request_id}"
-        event_data['request_link'] = request_link
-        
-        # Érintett userek meghatározása
+        # Specifikus userek vagy szabály alapján
         if specific_users:
-            # Konkrét userek megadva
             target_users = User.query.filter(User.id.in_(specific_users)).all()
             rules = NotificationService._get_rules_for_event(event_type_id)
         else:
-            # Szabályok alapján
             target_users, rules = NotificationService._determine_target_users(
                 event_type_id, event_data, request_id
             )
@@ -82,41 +75,37 @@ class NotificationService:
         if not target_users:
             return {'in_app_count': 0, 'email_count': 0}
         
-        in_app_count = 0
-        email_count = 0
+        # Generate message
+        message = NotificationService._generate_in_app_message(event_key, event_data)
+        link_url = f"/requests/{request_id}" if request_id else None
         
-        # Értesítések küldése minden user-nek
+        # Create notifications
+        stats = {'in_app_count': 0, 'email_count': 0}
+        
         for user in target_users:
-            # User szerepkörhöz tartozó szabály keresése
+            # Find user's applicable rule
             user_rule = next((r for r in rules if r['role'] == user.role), None)
             
             if not user_rule:
                 continue
             
             # In-app notification
-            if user_rule['in_app_enabled']:
-                message = NotificationService._generate_in_app_message(
-                    event_key, event_data
-                )
+            if user_rule.get('in_app_enabled'):
                 NotificationService._create_in_app_notification(
-                    user.id, event_type_id, message, request_link, 
-                    request_id, event_data
+                    user.id, event_type_id, message, link_url, request_id, event_data
                 )
-                in_app_count += 1
+                stats['in_app_count'] += 1
             
             # Email notification
-            if user_rule['email_enabled'] and user_rule['email_template_id']:
+            if user_rule.get('email_enabled') and user_rule.get('email_template_id'):
                 NotificationService._send_email_notification(
                     user, event_data, user_rule['email_template_id']
                 )
-                email_count += 1
+                stats['email_count'] += 1
         
         db.session.commit()
         
-        return {
-            'in_app_count': in_app_count,
-            'email_count': email_count
-        }
+        return stats
     
     @staticmethod
     def _determine_target_users(event_type_id, event_data, request_id):
@@ -174,7 +163,7 @@ class NotificationService:
         for row in cursor:
             rules.append({
                 'role': row[0],
-                'event_filter': json.loads(row[1]) if row[1] else None,
+                'event_filter': row[1],
                 'in_app_enabled': bool(row[2]),
                 'email_enabled': bool(row[3]),
                 'email_template_id': row[4],
@@ -185,18 +174,24 @@ class NotificationService:
     
     @staticmethod
     def _generate_in_app_message(event_key, event_data):
-        """In-app notification szöveg generálása"""
-        messages = {
-            'status_change': f"Státuszváltozás: {event_data.get('request_number', '')} → {event_data.get('new_status', '')}",
-            'new_request': f"Új kérés: {event_data.get('request_number', '')} ({event_data.get('company_name', '')})",
-            'request_approved': f"Jóváhagyva: {event_data.get('request_number', '')}",
-            'request_rejected': f"Elutasítva: {event_data.get('request_number', '')}",
-            'results_uploaded': f"Eredmények feltöltve: {event_data.get('request_number', '')}",
-            'deadline_approaching': f"Határidő közeledik: {event_data.get('request_number', '')} ({event_data.get('days_remaining', '')} nap)",
-            'comment_added': f"Új megjegyzés: {event_data.get('request_number', '')}"
+        """In-app notification message generálása"""
+        # Event-specific messages
+        templates = {
+            'status_change': "Kérés státusza megváltozott: {old_status} → {new_status}",
+            'new_request': "Új labor kérés érkezett: {request_number}",
+            'request_approved': "Kérés jóváhagyva: {request_number}",
+            'request_rejected': "Kérés elutasítva: {request_number}",
+            'results_uploaded': "Eredmények feltöltve: {request_number}",
+            'sample_received': "Minta átvéve: {request_number}",
+            'comment_added': "Új megjegyzés: {request_number}"
         }
         
-        return messages.get(event_key, f"Új értesítés: {event_data.get('request_number', '')}")
+        template = templates.get(event_key, "Esemény: {event_key}")
+        
+        try:
+            return template.format(**event_data, event_key=event_key)
+        except KeyError:
+            return f"Esemény: {event_key}"
     
     @staticmethod
     def _create_in_app_notification(user_id, event_type_id, message, link_url, request_id, event_data):
@@ -204,7 +199,7 @@ class NotificationService:
         # Late import - circular import elkerülése
         from app import db
         
-db.session.execute("""
+        db.session.execute("""
             INSERT INTO notifications 
             (user_id, event_type_id, event_data, message, link_url, request_id)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -216,40 +211,37 @@ db.session.execute("""
         # Late import - circular import elkerülése
         from app import db
         
-# Template lekérése
+        # Template lekérése
         cursor = db.session.execute("""
-            SELECT subject, body FROM notification_templates WHERE id = ?
+            SELECT subject, body_html FROM notification_templates WHERE id = ?
         """, (template_id,))
-        
         template = cursor.fetchone()
+        
         if not template:
-            current_app.logger.warning(f"Template not found: {template_id}")
             return
         
-        subject_template, body_template = template
+        subject, body_html = template
         
-        # Template feldolgozása (változók behelyettesítése)
-        subject = NotificationService._render_template(subject_template, event_data)
-        body = NotificationService._render_template(body_template, event_data)
+        # Template renderelés
+        rendered_subject = NotificationService._render_template(subject, event_data)
+        rendered_body = NotificationService._render_template(body_html, event_data)
         
-        # Email küldés (később implementáljuk az SMTP-t)
-        # TODO: Implement actual email sending
-        current_app.logger.info(f"Email would be sent to {user.email}: {subject}")
-        
-        # SMTP implementáció később:
-        # from flask_mail import Message
-        # msg = Message(subject, recipients=[user.email], html=body)
-        # mail.send(msg)
+        # TODO: Email küldés implementálás (v8.1)
+        # SMTP beállítások lekérése és Flask-Mail küldés
+        current_app.logger.info(f"Email notification queued for {user.email}: {rendered_subject}")
     
     @staticmethod
     def _render_template(template, data):
-        """Template renderelés ({{variable}} helyettesítés)"""
+        """Template renderelés ({{variable}} -> érték)"""
         def replace_var(match):
             var_name = match.group(1)
-            return str(data.get(var_name, ''))
+            return str(data.get(var_name, f"{{{{{var_name}}}}}"))
         
-        # {{variable}} pattern helyettesítése
         return re.sub(r'\{\{(\w+)\}\}', replace_var, template)
+    
+    # ============================================
+    # USER-FACING API METHODS
+    # ============================================
     
     @staticmethod
     def mark_as_read(notification_id, user_id):
@@ -257,11 +249,11 @@ db.session.execute("""
         # Late import - circular import elkerülése
         from app import db
         
-db.session.execute("""
+        db.session.execute("""
             UPDATE notifications 
-            SET read_at = ? 
+            SET is_read = 1, read_at = CURRENT_TIMESTAMP
             WHERE id = ? AND user_id = ?
-        """, (datetime.utcnow(), notification_id, user_id))
+        """, (notification_id, user_id))
         db.session.commit()
     
     @staticmethod
@@ -270,11 +262,11 @@ db.session.execute("""
         # Late import - circular import elkerülése
         from app import db
         
-db.session.execute("""
+        db.session.execute("""
             UPDATE notifications 
-            SET read_at = ? 
-            WHERE user_id = ? AND read_at IS NULL
-        """, (datetime.utcnow(), user_id))
+            SET is_read = 1, read_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND is_read = 0
+        """, (user_id,))
         db.session.commit()
     
     @staticmethod
@@ -283,7 +275,7 @@ db.session.execute("""
         # Late import - circular import elkerülése
         from app import db
         
-db.session.execute("""
+        db.session.execute("""
             DELETE FROM notifications 
             WHERE id = ? AND user_id = ?
         """, (notification_id, user_id))
@@ -291,13 +283,13 @@ db.session.execute("""
     
     @staticmethod
     def get_user_notifications(user_id, unread_only=False, limit=50):
-        """User notifikációi"""
+        """User notificationjei lekérése"""
         # Late import - circular import elkerülése
         from app import db
         
-query = """
-            SELECT n.id, n.event_type_id, net.event_name, n.message, 
-                   n.link_url, n.read_at, n.created_at, n.request_id
+        query = """
+            SELECT n.id, n.message, n.link_url, n.is_read, n.created_at, 
+                   net.event_key, net.event_name, n.event_data
             FROM notifications n
             JOIN notification_event_types net ON n.event_type_id = net.id
             WHERE n.user_id = ?
@@ -306,7 +298,7 @@ query = """
         params = [user_id]
         
         if unread_only:
-            query += " AND n.read_at IS NULL"
+            query += " AND n.is_read = 0"
         
         query += " ORDER BY n.created_at DESC LIMIT ?"
         params.append(limit)
@@ -317,26 +309,25 @@ query = """
         for row in cursor:
             notifications.append({
                 'id': row[0],
-                'event_type_id': row[1],
-                'event_name': row[2],
-                'message': row[3],
-                'link_url': row[4],
-                'read_at': row[5],
-                'created_at': row[6],
-                'request_id': row[7]
+                'message': row[1],
+                'link_url': row[2],
+                'is_read': bool(row[3]),
+                'created_at': row[4],
+                'event_key': row[5],
+                'event_name': row[6],
+                'event_data': json.loads(row[7]) if row[7] else {}
             })
         
         return notifications
     
     @staticmethod
     def get_unread_count(user_id):
-        """Olvasatlan notifikációk száma"""
+        """Olvasatlan notificationök száma"""
         # Late import - circular import elkerülése
         from app import db
         
-cursor = db.session.execute("""
+        cursor = db.session.execute("""
             SELECT COUNT(*) FROM notifications 
-            WHERE user_id = ? AND read_at IS NULL
+            WHERE user_id = ? AND is_read = 0
         """, (user_id,))
-        
         return cursor.fetchone()[0]
