@@ -12,11 +12,12 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak  # v7.0.8: PageBreak
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image  # v7.0.31: Image QR kódhoz
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+import qrcode  # v7.0.31: QR kód generálás
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
@@ -2237,6 +2238,221 @@ def export_request_pdf(current_user, request_id):
         download_name=f'laborkeres_{req.sample_id}.pdf'
     )
 
+# v7.0.31: Minta átadás-átvételi jegyzőkönyv PDF (QR kóddal)
+@app.route('/api/requests/<int:request_id>/handover-pdf', methods=['GET'])
+@token_required
+def export_handover_pdf(current_user, request_id):
+    """Minta átadás-átvételi jegyzőkönyv PDF generálás QR kóddal"""
+    req = LabRequest.query.get_or_404(request_id)
+    
+    # Jogosultság: Csak awaiting_shipment vagy későbbi státuszú kéréseknél
+    allowed_statuses = ['awaiting_shipment', 'in_transit', 'arrived_at_provider', 'in_progress', 'validation_pending', 'completed']
+    if req.status not in allowed_statuses:
+        return jsonify({'message': 'Ez a dokumentum csak jóváhagyott kéréseknél elérhető!'}), 403
+    
+    # Jogosultság ellenőrzés
+    if current_user.role == 'company_user' and req.user_id != current_user.id:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    if current_user.role == 'company_admin' and req.company_id != current_user.company_id:
+        return jsonify({'message': 'Nincs jogosultságod!'}), 403
+    
+    # Font registration
+    default_font = 'Helvetica'
+    bold_font = 'Helvetica-Bold'
+    
+    font_paths = [
+        ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'),
+        ('/usr/share/fonts/TTF/DejaVuSans.ttf', '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf'),
+        ('/usr/share/fonts/truetype/freefont/FreeSans.ttf', '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf'),
+        ('/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf'),
+    ]
+    
+    font_registered = False
+    for regular_path, bold_path in font_paths:
+        try:
+            if os.path.exists(regular_path) and os.path.exists(bold_path):
+                pdfmetrics.registerFont(TTFont('CustomFont', regular_path))
+                pdfmetrics.registerFont(TTFont('CustomFont-Bold', bold_path))
+                default_font = 'CustomFont'
+                bold_font = 'CustomFont-Bold'
+                font_registered = True
+                break
+        except Exception as e:
+            continue
+    
+    # QR kód generálás
+    frontend_url = os.environ.get('FRONTEND_URL', 'https://lab-request-frontend.netlify.app')
+    qr_data = f"{frontend_url}/logistics/scan?request={req.request_number}"
+    qr = qrcode.QRCode(version=1, box_size=10, border=2)
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    qr_img = qr.make_image(fill_color="black", back_color="white")
+    
+    # QR kód BytesIO-ba mentés
+    qr_buffer = BytesIO()
+    qr_img.save(qr_buffer, format='PNG')
+    qr_buffer.seek(0)
+    
+    # PDF build
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=2*cm, leftMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Title
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#4F46E5'),
+        spaceAfter=15,
+        alignment=TA_CENTER,
+        fontName=bold_font
+    )
+    elements.append(Paragraph('MINTA ÁTADÁS-ÁTVÉTELI JEGYZŐKÖNYV', title_style))
+    elements.append(Spacer(1, 0.3*cm))
+    
+    # Header with QR code
+    qr_image = Image(qr_buffer, width=3.5*cm, height=3.5*cm)
+    id_para = Paragraph(f'<b>Kérés azonosító:</b> {req.request_number}', ParagraphStyle('IDStyle', parent=styles['Normal'], fontSize=13, fontName=default_font))
+    header_table = Table([[id_para, qr_image]], colWidths=[13*cm, 4*cm])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+        ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(header_table)
+    elements.append(Spacer(1, 0.4*cm))
+    
+    # Internal ID
+    if req.internal_id:
+        id_style = ParagraphStyle('IDStyle2', parent=styles['Normal'], fontSize=11, spaceAfter=12, fontName=default_font)
+        elements.append(Paragraph(f'<b>Céges belső azonosító:</b> {req.internal_id}', id_style))
+    
+    # Sampling time
+    sampling_time = '-'
+    if req.sampling_datetime:
+        sampling_time = req.sampling_datetime.strftime('%Y-%m-%d %H:%M')
+    elif req.sampling_date:
+        sampling_time = req.sampling_date.strftime('%Y-%m-%d')
+    
+    # Logistics info
+    logistics_text = 'Feladó gondoskodik' if req.logistics_type == 'sender' else 'Szolgáltató szállít'
+    
+    # Main info table
+    data = [
+        ['Feladó:', req.user.name],
+        ['Cég:', req.company.name if req.company else '-'],
+        ['Kategória:', req.category.name if req.category else '-'],
+        ['Mintavétel helye:', req.sampling_location or '-'],
+        ['Mintavétel időpontja:', sampling_time],
+        ['Határidő:', req.deadline.strftime('%Y-%m-%d') if req.deadline else '-'],
+        ['Minta leírása:', req.sample_description or '-'],
+        ['Logisztika:', logistics_text],
+        ['Kontakt:', f"{req.contact_person or '-'} ({req.contact_phone or '-'})"],
+    ]
+    
+    if req.logistics_type == 'provider' and req.shipping_address:
+        data.append(['Szállítási cím:', req.shipping_address])
+    
+    table = Table(data, colWidths=[5*cm, 11*cm])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#F3F4F6')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (0, -1), bold_font),
+        ('FONTNAME', (1, 0), (1, -1), default_font),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey)
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 0.4*cm))
+    
+    # Test types
+    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontSize=13, fontName=bold_font)
+    elements.append(Paragraph('<b>Kért vizsgálatok:</b>', heading_style))
+    elements.append(Spacer(1, 0.2*cm))
+    
+    test_data = [['Vizsgálat neve', 'Szervezeti egység', 'Átfutás (nap)', 'Ár (Ft)']]
+    test_types = get_test_type_details(req.test_types)
+    for tt in test_types:
+        test_data.append([
+            tt['name'],
+            tt.get('department_name', '-'),
+            str(tt.get('turnaround_days', '-')),
+            f"{tt['price']:,.0f}"
+        ])
+    
+    test_table = Table(test_data, colWidths=[6*cm, 4*cm, 3*cm, 3*cm])
+    test_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4F46E5')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), bold_font),
+        ('FONTNAME', (0, 1), (-1, -1), default_font),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey)
+    ]))
+    elements.append(test_table)
+    elements.append(Spacer(1, 0.3*cm))
+    
+    # Total price
+    total_style = ParagraphStyle('Total', parent=styles['Normal'], fontSize=13, alignment=TA_LEFT, fontName=bold_font)
+    elements.append(Paragraph(f'<b>Összköltség: {req.total_price:,.0f} Ft</b>', total_style))
+    
+    # Special instructions
+    if req.special_instructions:
+        elements.append(Spacer(1, 0.4*cm))
+        elements.append(Paragraph('<b>Különleges kezelési utasítások:</b>', heading_style))
+        instruction_style = ParagraphStyle('Instruction', parent=styles['Normal'], fontSize=10, fontName=default_font)
+        elements.append(Paragraph(req.special_instructions, instruction_style))
+    
+    # Handover-specific content
+    elements.append(Spacer(1, 0.8*cm))
+    
+    # Order statement
+    order_style = ParagraphStyle('Order', parent=styles['Normal'], fontSize=12, alignment=TA_CENTER, fontName=bold_font, spaceAfter=25)
+    elements.append(Paragraph('<b>A fentiek szerinti vizsgálatok ezúton megrendelem.</b>', order_style))
+    
+    # Signature section
+    today = datetime.datetime.now().strftime('%Y. %m. %d.')
+    signature_data = [
+        ['Jóváhagyás dátuma:', today],
+        ['', ''],
+        ['Cég bélyegzője:', 'Jóváhagyó aláírása:'],
+        ['', ''],
+        ['', '________________________________'],
+    ]
+    signature_table = Table(signature_data, colWidths=[8*cm, 8*cm])
+    signature_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (0, 0), bold_font),
+        ('FONTNAME', (1, 0), (1, 0), default_font),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 2), 6),
+        ('FONTNAME', (0, 2), (-1, 2), bold_font),
+    ]))
+    elements.append(signature_table)
+    
+    # Italic instruction
+    elements.append(Spacer(1, 0.4*cm))
+    italic_style = ParagraphStyle('Italic', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER, fontName=default_font, textColor=colors.grey, leading=12)
+    elements.append(Paragraph('<i>Kérem, az eredeti átadás-átvételi jegyzőkönyvet aláírni és a mintához mellékelni szíveskedjen.</i>', italic_style))
+    
+    # Build PDF
+    doc.build(elements)
+    buffer.seek(0)
+    
+    return send_file(
+        buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'atadas_atveteli_{req.request_number}.pdf'
+    )
+
 # --- Users Routes ---
 @app.route('/api/users', methods=['GET'])
 @token_required
@@ -2519,6 +2735,78 @@ def update_logistics_status(current_user, request_id):
         'status': new_status,
         'request_number': req.request_number
     })
+
+# v7.0.31: QR kód beolvasás - szállítás indítása
+@app.route('/api/logistics/scan', methods=['POST'])
+@token_required
+def scan_qr_code(current_user):
+    """QR kód beolvasás - kérés in_transit státuszba helyezése"""
+    data = request.get_json()
+    request_number = data.get('request_number')
+    
+    if not request_number:
+        return jsonify({'message': 'Hiányzó request_number!'}), 400
+    
+    req = LabRequest.query.filter_by(request_number=request_number).first()
+    if not req:
+        return jsonify({'message': f'Nem található kérés: {request_number}'}), 404
+    
+    # Státusz ellenőrzés
+    if req.status != 'awaiting_shipment':
+        status_hu = {
+            'draft': 'piszkozat',
+            'pending_approval': 'jóváhagyásra vár',
+            'in_transit': 'már szállítás alatt van',
+            'arrived_at_provider': 'már megérkezett',
+            'in_progress': 'végrehajtás alatt',
+            'completed': 'elkészült'
+        }
+        current_status = status_hu.get(req.status, req.status)
+        return jsonify({
+            'message': f'Ezt a kérést nem lehet elindítani, mert {current_status}. Csak "szállításra vár" státuszú kéréseket lehet beolvasni!'
+        }), 400
+    
+    # Jogosultság: university_logistics vagy company_logistics
+    if current_user.role not in ['university_logistics', 'company_logistics']:
+        return jsonify({'message': 'Nincs jogosultságod szállítást indítani!'}), 403
+    
+    # Company logistics csak saját céget
+    if current_user.role == 'company_logistics' and req.company_id != current_user.company_id:
+        return jsonify({'message': 'Csak saját céged kéréseit módosíthatod!'}), 403
+    
+    # Státusz frissítés
+    old_status = req.status
+    req.status = 'in_transit'
+    req.updated_at = datetime.datetime.utcnow()
+    db.session.commit()
+    
+    # Értesítések
+    # Company admin
+    if req.company_id:
+        company_admins = User.query.filter_by(company_id=req.company_id, role='company_admin').all()
+        for admin in company_admins:
+            create_notification(
+                admin.id,
+                req.id,
+                'in_transit',
+                f'Szállítás megkezdve: {req.request_number}'
+            )
+    
+    # Requester
+    create_notification(
+        req.user_id,
+        req.id,
+        'in_transit',
+        f'Mintád szállítás alatt: {req.request_number}'
+    )
+    
+    return jsonify({
+        'success': True,
+        'message': f'Szállítás sikeresen elindítva!',
+        'request_number': req.request_number,
+        'new_status': req.status,
+        'scanned_by': current_user.name
+    }), 200
 
 # v7.0.27: === END LOGISTICS MODULE ===
 

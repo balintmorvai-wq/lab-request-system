@@ -9,7 +9,7 @@ function Logistics() {
   const [error, setError] = useState(null);
   
   // Szűrők
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('awaiting_shipment'); // v7.0.31: Default "szállításra vár"
   const [logisticsFilter, setLogisticsFilter] = useState('all'); // 'all', 'sender', 'provider'
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -323,79 +323,94 @@ function Logistics() {
               const LogisticsIcon = logisticsInfo.icon;
 
               return (
-                <div key={req.id} className="p-6 hover:bg-gray-50 transition-colors">
-                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                    {/* Bal - Kérés info */}
-                    <div className="flex-1 space-y-3">
-                      {/* Fejléc */}
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="text-lg font-bold text-gray-900">{req.request_number}</h3>
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${statusInfo.color}`}>
-                              <StatusIcon className="w-3.5 h-3.5" />
-                              {statusInfo.label}
-                            </span>
-                            <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold ${logisticsInfo.color}`}>
-                              <LogisticsIcon className="w-3.5 h-3.5" />
-                              {logisticsInfo.label}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-600">{req.sample_description}</p>
-                        </div>
-                      </div>
-
-                      {/* Cég és logisztikai adatok */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        <div className="flex items-center gap-2 text-gray-700">
-                          <User className="w-4 h-4 text-gray-400" />
-                          <span className="font-medium">{req.company_name}</span>
-                        </div>
-                        {req.shipping_address && (
-                          <div className="flex items-start gap-2 text-gray-700">
-                            <MapPin className="w-4 h-4 text-gray-400 mt-0.5" />
-                            <span className="text-xs">{req.shipping_address}</span>
-                          </div>
-                        )}
-                        {req.contact_person && (
-                          <div className="flex items-center gap-2 text-gray-700">
-                            <User className="w-4 h-4 text-gray-400" />
-                            <span className="text-xs">{req.contact_person}</span>
-                          </div>
-                        )}
-                        {req.contact_phone && (
-                          <div className="flex items-center gap-2 text-gray-700">
-                            <Phone className="w-4 h-4 text-gray-400" />
-                            <span className="text-xs">{req.contact_phone}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Sürgősség */}
-                      {req.urgency !== 'normal' && (
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className={`w-4 h-4 ${
-                            req.urgency === 'critical' ? 'text-red-600' : 'text-orange-600'
-                          }`} />
-                          <span className={`text-xs font-bold ${
-                            req.urgency === 'critical' ? 'text-red-600' : 'text-orange-600'
-                          }`}>
-                            {req.urgency === 'critical' ? 'KRITIKUS' : 'SÜRGŐS'}
-                          </span>
-                        </div>
-                      )}
+                <div key={req.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+                  <div className="flex flex-col gap-4">
+                    {/* v7.0.31: Mobile-first fejléc */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-base sm:text-lg font-bold text-gray-900">{req.request_number}</h3>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${statusInfo.color}`}>
+                        <StatusIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{statusInfo.label}</span>
+                      </span>
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${logisticsInfo.color}`}>
+                        <LogisticsIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                        <span className="hidden xs:inline">{logisticsInfo.label}</span>
+                      </span>
                     </div>
 
-                    {/* Jobb - Státusz gomb (státusz-specifikus jogosultság) */}
-                    {canChangeStatus(req.status) && statusInfo.nextStatus && (
-                      <div className="lg:w-48">
-                        <button
-                          onClick={() => updateStatus(req.id, statusInfo.nextStatus)}
-                          className="w-full px-4 py-3 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg transform hover:scale-105"
-                        >
-                          {statusInfo.nextLabel}
-                        </button>
+                    {/* v7.0.31: NAGY, olvasható kontakt info - minta leírás NINCS */}
+                    <div className="space-y-3">
+                      {/* Szállítási cím - NAGY, hangsúlyos */}
+                      {req.shipping_address && (
+                        <div className="flex items-start gap-3 bg-indigo-50 p-3 rounded-lg">
+                          <MapPin className="w-6 h-6 text-indigo-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-indigo-600 uppercase mb-1">Cím</p>
+                            <p className="text-base sm:text-lg font-bold text-gray-900 leading-tight break-words">{req.shipping_address}</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Kontakt személy + telefon - mobile-optimalizált grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Kontakt személy */}
+                        {req.contact_person && (
+                          <div className="flex items-center gap-3 bg-purple-50 p-3 rounded-lg">
+                            <User className="w-6 h-6 text-purple-600 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-purple-600 uppercase">Kontakt</p>
+                              <p className="text-base sm:text-lg font-bold text-gray-900 truncate">{req.contact_person}</p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Telefonszám - HÍVHATÓ link */}
+                        {req.contact_phone && (
+                          <div className="flex items-center gap-3 bg-green-50 p-3 rounded-lg">
+                            <Phone className="w-6 h-6 text-green-600 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-green-600 uppercase">Telefon</p>
+                              <a 
+                                href={`tel:${req.contact_phone}`} 
+                                className="text-base sm:text-lg font-bold text-green-600 hover:text-green-700 hover:underline block truncate"
+                              >
+                                {req.contact_phone}
+                              </a>
+                            </div>
+                          </div>
+                        )}
                       </div>
+                      
+                      {/* Cég név - kisebb, szürke */}
+                      <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                        <span className="text-sm text-gray-600">{req.company_name}</span>
+                      </div>
+                    </div>
+
+                    {/* Sürgősség - mobile-optimalizált */}
+                    {req.urgency !== 'normal' && (
+                      <div className={`flex items-center gap-2 p-2 rounded-lg ${
+                        req.urgency === 'critical' ? 'bg-red-100' : 'bg-orange-100'
+                      }`}>
+                        <AlertCircle className={`w-5 h-5 flex-shrink-0 ${
+                          req.urgency === 'critical' ? 'text-red-600' : 'text-orange-600'
+                        }`} />
+                        <span className={`text-sm font-bold ${
+                          req.urgency === 'critical' ? 'text-red-600' : 'text-orange-600'
+                        }`}>
+                          {req.urgency === 'critical' ? 'KRITIKUS SÜRGŐSSÉG' : 'SÜRGŐS'}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Státusz gomb - full width mobil-on */}
+                    {canChangeStatus(req.status) && statusInfo.nextStatus && (
+                      <button
+                        onClick={() => updateStatus(req.id, statusInfo.nextStatus)}
+                        className="w-full px-4 py-3 sm:py-4 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-lg text-base sm:text-lg font-bold hover:from-indigo-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg active:scale-95"
+                      >
+                        {statusInfo.nextLabel}
+                      </button>
                     )}
                   </div>
                 </div>

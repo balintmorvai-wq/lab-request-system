@@ -19,7 +19,8 @@ import {
   Send,
   XCircle,
   Trash2,
-  Eye  // v7.0.6: Eredmények megtekintése ikon
+  Eye,  // v7.0.6: Eredmények megtekintése ikon
+  Clipboard  // v7.0.31: Átadás-átvételi jegyzőkönyv
 } from 'lucide-react';
 
 function RequestList() {
@@ -105,6 +106,31 @@ function RequestList() {
       console.error('[PDF Download] Response:', error.response?.data);
       console.error('[PDF Download] Status:', error.response?.status);
       alert(`Hiba történt a PDF letöltése során: ${error.response?.status === 403 ? 'Nincs jogosultságod!' : 'Ismeretlen hiba'}`);
+    }
+  };
+
+  // v7.0.31: Átadás-átvételi jegyzőkönyv PDF letöltés
+  const downloadHandoverPDF = async (requestId, requestNumber) => {
+    try {
+      const response = await axios.get(
+        `${API_URL}/requests/${requestId}/handover-pdf`,
+        {
+          headers: getAuthHeaders(),
+          responseType: 'blob'
+        }
+      );
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `atadas_atveteli_${requestNumber}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Átadás-átvételi PDF hiba:', error);
+      alert(`Hiba: ${error.response?.data?.message || 'PDF generálás sikertelen'}`);
     }
   };
 
@@ -455,6 +481,17 @@ function RequestList() {
                           <Download className="w-4 h-4" />
                         )}
                       </button>
+
+                      {/* v7.0.31: Átadás-átvételi jegyzőkönyv PDF */}
+                      {['awaiting_shipment', 'in_transit', 'arrived_at_provider'].includes(request.status) && (
+                        <button
+                          onClick={() => downloadHandoverPDF(request.id, request.request_number)}
+                          className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                          title="Átadás-átvételi jegyzőkönyv (QR kóddal)"
+                        >
+                          <Clipboard className="w-4 h-4" />
+                        </button>
+                      )}
 
                       {/* Eredmények megtekintése */}
                       {request.status === 'completed' && (user?.role === 'labor_staff' || user?.role === 'super_admin') && (

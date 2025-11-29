@@ -12,6 +12,7 @@ import CategoryManagement from './components/CategoryManagement';
 import WorkList from './components/WorkList';  // v7.0
 import TestResultsPanel from './components/TestResultsPanel';  // v7.0
 import Logistics from './components/Logistics';  // v7.0.27
+import QRScanner from './components/QRScanner';  // v7.0.31
 import Layout from './components/Layout';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -125,6 +126,16 @@ function AppRoutes() {
           element={
             <PrivateRoute allowedRoles={['super_admin', 'university_logistics', 'company_logistics', 'company_admin', 'company_user']}>
               <Logistics />
+            </PrivateRoute>
+          } 
+        />
+        
+        {/* v7.0.31: QR kód beolvasás */}
+        <Route 
+          path="logistics/scan" 
+          element={
+            <PrivateRoute allowedRoles={['university_logistics', 'company_logistics']}>
+              <QRScanner />
             </PrivateRoute>
           } 
         />
