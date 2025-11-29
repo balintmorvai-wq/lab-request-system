@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
 import { Truck, Package, CheckCircle, Clock, Search, Filter, AlertCircle, MapPin, User, Phone } from 'lucide-react';
 
 function Logistics() {
-  const { user } = useContext(AuthContext);
+  const { user, getAuthHeaders, API_URL } = useAuth();
   const [logistics, setLogistics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -19,10 +19,8 @@ function Logistics() {
 
   const fetchLogistics = async () => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/logistics`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+      const response = await fetch(`${API_URL}/logistics`, {
+        headers: getAuthHeaders()
       });
 
       if (!response.ok) throw new Error('Hiba a logisztikai adatok lekérésekor');
@@ -39,11 +37,11 @@ function Logistics() {
   const updateStatus = async (requestId, newStatus) => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/logistics/${requestId}/update-status`,
+        `${API_URL}/logistics/${requestId}/update-status`,
         {
           method: 'PUT',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            ...getAuthHeaders(),
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ status: newStatus })
