@@ -100,18 +100,13 @@ function Logistics() {
     }
   };
 
-  // Stats számítás státuszonként
-  const getDetailedStats = (status) => {
-    const filtered = logistics.filter(req => {
-      if (status !== 'all' && req.status !== status) return false;
+  // Stats számítás státuszonként (simple count only)
+  const getStats = (status) => {
+    return logistics.filter(req => {
+      if (req.status !== status) return false;
       if (logisticsFilter !== 'all' && req.logistics_type !== logisticsFilter) return false;
       return true;
-    });
-
-    return {
-      requestCount: filtered.length,
-      urgentCount: filtered.filter(r => r.urgency === 'urgent' || r.urgency === 'critical').length
-    };
+    }).length;
   };
 
   // Szűrt lista
@@ -136,8 +131,18 @@ function Logistics() {
     return true;
   });
 
-  // Jogosultság ellenőrzés státusz változtatáshoz
-  const canChangeStatus = user?.role in ['super_admin', 'university_logistics', 'company_logistics'];
+  // Jogosultság ellenőrzés státusz változtatáshoz (státusz-specifikus)
+  const canChangeStatus = (status) => {
+    // awaiting_shipment → in_transit: logistics munkatársak
+    if (status === 'awaiting_shipment') {
+      return user?.role === 'university_logistics' || user?.role === 'company_logistics';
+    }
+    // in_transit → arrived_at_provider: company admin vagy super admin
+    if (status === 'in_transit') {
+      return user?.role === 'company_admin' || user?.role === 'super_admin';
+    }
+    return false;
+  };
 
   if (loading) {
     return (
@@ -168,107 +173,62 @@ function Logistics() {
         </div>
       </div>
 
-      {/* Dashboard Kártyák */}
+      {/* Dashboard Kártyák - csak 3 logisztikai státusz */}
       <div className="bg-white rounded-xl shadow-md p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Összes */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Szállításra vár */}
           <button
-            onClick={() => setFilter('all')}
-            className={`bg-white rounded-xl shadow-lg p-5 border-2 transition-all transform hover:scale-105 ${
-              filter === 'all' 
-                ? 'border-indigo-500 ring-4 ring-indigo-200 shadow-xl' 
-                : 'border-gray-200 hover:border-indigo-400 hover:shadow-2xl'
+            onClick={() => setFilter('awaiting_shipment')}
+            className={`bg-white rounded-xl shadow-lg p-6 border-2 transition-all transform hover:scale-105 ${
+              filter === 'awaiting_shipment' 
+                ? 'border-orange-500 ring-4 ring-orange-200 shadow-xl' 
+                : 'border-gray-200 hover:border-orange-400 hover:shadow-2xl'
             }`}
           >
-            <div className="flex items-center gap-2 mb-1">
-              <Package className="w-5 h-5 text-indigo-600" />
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Összes</p>
+            <div className="flex items-center gap-2 mb-2">
+              <Package className="w-6 h-6 text-orange-600" />
+              <p className="text-sm font-bold text-gray-700 uppercase tracking-wide">Szállításra vár</p>
             </div>
-            <p className="text-3xl font-extrabold text-indigo-600">
-              {getDetailedStats('all').requestCount}
-            </p>
-            <p className="text-xs text-gray-600 font-medium mt-1">
-              {getDetailedStats('all').urgentCount} sürgős
+            <p className="text-4xl font-extrabold text-orange-600">
+              {getStats('awaiting_shipment')}
             </p>
           </button>
 
-          {/* Szállításra vár */}
-          {(() => {
-            const stats = getDetailedStats('awaiting_shipment');
-            return (
-              <button
-                onClick={() => setFilter('awaiting_shipment')}
-                className={`bg-white rounded-xl shadow-lg p-5 border-2 transition-all transform hover:scale-105 ${
-                  filter === 'awaiting_shipment' 
-                    ? 'border-orange-500 ring-4 ring-orange-200 shadow-xl' 
-                    : 'border-gray-200 hover:border-orange-400 hover:shadow-2xl'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <Package className="w-5 h-5 text-orange-600" />
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Szállításra vár</p>
-                </div>
-                <p className="text-3xl font-extrabold text-orange-600">
-                  {stats.requestCount}
-                </p>
-                <p className="text-xs text-gray-600 font-medium mt-1">
-                  {stats.urgentCount} sürgős
-                </p>
-              </button>
-            );
-          })()}
-
           {/* Szállítás alatt */}
-          {(() => {
-            const stats = getDetailedStats('in_transit');
-            return (
-              <button
-                onClick={() => setFilter('in_transit')}
-                className={`bg-white rounded-xl shadow-lg p-5 border-2 transition-all transform hover:scale-105 ${
-                  filter === 'in_transit' 
-                    ? 'border-blue-500 ring-4 ring-blue-200 shadow-xl' 
-                    : 'border-gray-200 hover:border-blue-400 hover:shadow-2xl'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <Truck className="w-5 h-5 text-blue-600" />
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Szállítás alatt</p>
-                </div>
-                <p className="text-3xl font-extrabold text-blue-600">
-                  {stats.requestCount}
-                </p>
-                <p className="text-xs text-gray-600 font-medium mt-1">
-                  {stats.urgentCount} sürgős
-                </p>
-              </button>
-            );
-          })()}
+          <button
+            onClick={() => setFilter('in_transit')}
+            className={`bg-white rounded-xl shadow-lg p-6 border-2 transition-all transform hover:scale-105 ${
+              filter === 'in_transit' 
+                ? 'border-blue-500 ring-4 ring-blue-200 shadow-xl' 
+                : 'border-gray-200 hover:border-blue-400 hover:shadow-2xl'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <Truck className="w-6 h-6 text-blue-600" />
+              <p className="text-sm font-bold text-gray-700 uppercase tracking-wide">Szállítás alatt</p>
+            </div>
+            <p className="text-4xl font-extrabold text-blue-600">
+              {getStats('in_transit')}
+            </p>
+          </button>
 
           {/* Megérkezett */}
-          {(() => {
-            const stats = getDetailedStats('arrived_at_provider');
-            return (
-              <button
-                onClick={() => setFilter('arrived_at_provider')}
-                className={`bg-white rounded-xl shadow-lg p-5 border-2 transition-all transform hover:scale-105 ${
-                  filter === 'arrived_at_provider' 
-                    ? 'border-green-500 ring-4 ring-green-200 shadow-xl' 
-                    : 'border-gray-200 hover:border-green-400 hover:shadow-2xl'
-                }`}
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <p className="text-xs font-bold text-gray-700 uppercase tracking-wide">Megérkezett</p>
-                </div>
-                <p className="text-3xl font-extrabold text-green-600">
-                  {stats.requestCount}
-                </p>
-                <p className="text-xs text-gray-600 font-medium mt-1">
-                  {stats.urgentCount} sürgős
-                </p>
-              </button>
-            );
-          })()}
+          <button
+            onClick={() => setFilter('arrived_at_provider')}
+            className={`bg-white rounded-xl shadow-lg p-6 border-2 transition-all transform hover:scale-105 ${
+              filter === 'arrived_at_provider' 
+                ? 'border-green-500 ring-4 ring-green-200 shadow-xl' 
+                : 'border-gray-200 hover:border-green-400 hover:shadow-2xl'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+              <p className="text-sm font-bold text-gray-700 uppercase tracking-wide">Megérkezett</p>
+            </div>
+            <p className="text-4xl font-extrabold text-green-600">
+              {getStats('arrived_at_provider')}
+            </p>
+          </button>
         </div>
       </div>
 
@@ -409,8 +369,8 @@ function Logistics() {
                       )}
                     </div>
 
-                    {/* Jobb - Státusz gomb */}
-                    {canChangeStatus && statusInfo.nextStatus && (
+                    {/* Jobb - Státusz gomb (státusz-specifikus jogosultság) */}
+                    {canChangeStatus(req.status) && statusInfo.nextStatus && (
                       <div className="lg:w-48">
                         <button
                           onClick={() => updateStatus(req.id, statusInfo.nextStatus)}

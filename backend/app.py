@@ -2422,19 +2422,12 @@ def update_logistics_status(current_user, request_id):
     Logisztikai státusz frissítése
     
     Engedélyezett átmenetek:
-    - awaiting_shipment → in_transit (logistics indítja szállítást)
-    - in_transit → arrived_at_provider (logistics jelzi megérkezést)
+    - awaiting_shipment → in_transit: university_logistics, company_logistics
+    - in_transit → arrived_at_provider: company_admin, super_admin
     """
-    if current_user.role not in ['super_admin', 'university_logistics', 'company_logistics']:
-        return jsonify({'message': 'Nincs jogosultságod!'}), 403
-    
     req = LabRequest.query.get_or_404(request_id)
     data = request.get_json()
     new_status = data.get('status')
-    
-    # Jogosultság ellenőrzés céges logistics esetén
-    if current_user.role == 'company_logistics' and req.company_id != current_user.company_id:
-        return jsonify({'message': 'Csak saját céged kéréseit módosíthatod!'}), 403
     
     # Státusz átmenet ellenőrzés
     valid_transitions = {
@@ -2447,6 +2440,25 @@ def update_logistics_status(current_user, request_id):
     
     if new_status not in valid_transitions[req.status]:
         return jsonify({'message': f'Érvénytelen státusz átmenet: {req.status} → {new_status}'}), 400
+    
+    # Jogosultság ellenőrzés STÁTUSZ-SPECIFIKUSAN
+    # awaiting_shipment → in_transit: logistics munkatársak
+    if req.status == 'awaiting_shipment' and new_status == 'in_transit':
+        if current_user.role not in ['university_logistics', 'company_logistics']:
+            return jsonify({'message': 'Nincs jogosultságod szállítást indítani!'}), 403
+        # Céges logistics csak saját céget módosíthat
+        if current_user.role == 'company_logistics' and req.company_id != current_user.company_id:
+            return jsonify({'message': 'Csak saját céged kéréseit módosíthatod!'}), 403
+    
+    # in_transit → arrived_at_provider: company_admin vagy super_admin
+    elif req.status == 'in_transit' and new_status == 'arrived_at_provider':
+        if current_user.role not in ['company_admin', 'super_admin']:
+            return jsonify({'message': 'Nincs jogosultságod megérkezést jelezni!'}), 403
+        # Company admin csak saját céget módosíthat
+        if current_user.role == 'company_admin' and req.company_id != current_user.company_id:
+            return jsonify({'message': 'Csak saját céged kéréseit módosíthatod!'}), 403
+    else:
+        return jsonify({'message': 'Érvénytelen művelet!'}), 403
     
     old_status = req.status
     req.status = new_status

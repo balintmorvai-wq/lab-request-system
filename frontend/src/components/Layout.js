@@ -118,8 +118,14 @@ function Layout() {
   const renderRegularMenu = () => {
     let navigation = [];
     
+    // v7.0.27: Logisztikai munkatársak - CSAK Logisztika menü
+    if (user?.role === 'company_logistics' || user?.role === 'university_logistics') {
+      navigation = [
+        { name: 'Logisztika', href: '/logistics', icon: Truck }
+      ];
+    }
     // v7.0: Labor staff számára külön navigáció
-    if (user?.role === 'labor_staff') {
+    else if (user?.role === 'labor_staff') {
       navigation = [
         // v7.0.13: Dashboard eltávolítva - labor staff egyből munkalistára megy
         { name: 'Munkalistám', href: '/worklist', icon: Clipboard },  // v7.0: Új menüpont
@@ -136,7 +142,7 @@ function Layout() {
       }
       
       // v7.0.27: Logistics menü company_admin és company_user számára
-      if (user?.role === 'company_admin' || user?.role === 'company_user' || user?.role === 'company_logistics' || user?.role === 'university_logistics') {
+      if (user?.role === 'company_admin' || user?.role === 'company_user') {
         navigation.push({ name: 'Logisztika', href: '/logistics', icon: Truck });
       }
     }
