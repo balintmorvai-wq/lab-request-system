@@ -41,7 +41,13 @@ function AppRoutes() {
   const { user } = useAuth();
   
   // v7.0.13: Labor staff átirányítás munkalistára
-  const defaultRoute = user?.role === 'labor_staff' ? '/worklist' : '/dashboard';
+  // v7.0.28: Logistics munkatársak átirányítás logisztikára
+  let defaultRoute = '/dashboard';
+  if (user?.role === 'labor_staff') {
+    defaultRoute = '/worklist';
+  } else if (user?.role === 'company_logistics' || user?.role === 'university_logistics') {
+    defaultRoute = '/logistics';
+  }
   
   return (
     <Routes>

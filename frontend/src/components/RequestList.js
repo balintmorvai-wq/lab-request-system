@@ -316,7 +316,11 @@ function RequestList() {
               <option value="all">Összes státusz</option>
               <option value="draft">Piszkozat (szerkeszthető)</option>
               <option value="pending_approval">Céges jóváhagyásra vár</option>
-              <option value="submitted">Szolgáltatóhoz beküldve</option>
+              {/* v7.0.29: Logisztikai státuszok */}
+              <option value="awaiting_shipment">Szállításra vár</option>
+              <option value="in_transit">Szállítás alatt</option>
+              <option value="arrived_at_provider">Szolgáltatóhoz megérkezett</option>
+              {/* Szolgáltatói státuszok */}
               <option value="in_progress">Végrehajtás alatt</option>
               <option value="validation_pending">Validálásra vár</option>
               <option value="completed">Elkészült</option>
@@ -415,8 +419,8 @@ function RequestList() {
 
                     {/* Jobb oldal - Gombok */}
                     <div className="flex gap-1.5 items-start">
-                      {/* Edit Button for DRAFT only */}
-                      {request.status === 'draft' && user?.role === 'company_user' && (
+                      {/* Edit Button for DRAFT only - v7.0.29: company_admin is szerkeszthet */}
+                      {request.status === 'draft' && (user?.role === 'company_user' || user?.role === 'company_admin') && (
                         <Link
                           to={`/requests/edit/${request.id}`}
                           className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -494,7 +498,7 @@ function RequestList() {
                         </button>
                       )}
 
-                      {/* v7.0.17: Státusz váltás - Mindig lefele nyíló dropdown, magasabb z-index */}
+                      {/* v7.0.29: Státusz váltás - Dropdown scroll fix kis táblázatnál */}
                       {canEditStatus && (
                         <div className="relative">
                           <button
@@ -506,13 +510,13 @@ function RequestList() {
                           
                           {selectedRequestId === request.id && (
                             <>
-                              {/* v7.0.17: Backdrop - kattintásra bezáródik */}
+                              {/* Backdrop - kattintásra bezáródik */}
                               <div 
                                 className="fixed inset-0 z-40" 
                                 onClick={() => setSelectedRequestId(null)}
                               />
-                              {/* v7.0.17: Dropdown - mindig látható, fixen lefele */}
-                              <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50">
+                              {/* Dropdown - max-height + scroll kis táblázatnál */}
+                              <div className="absolute right-0 top-full mt-2 w-56 max-h-60 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-xl z-50">
                                 {Object.entries(statusConfig).map(([status, config]) => (
                                   <button
                                     key={status}

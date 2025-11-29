@@ -1191,7 +1191,8 @@ def create_request(current_user):
         urgency=data.get('urgency', 'normal'),
         deadline=deadline,
         # Státusz
-        status=data.get('status', 'draft'),
+        # v7.0.29: Company admin jóváhagyásra küldésnél automatikusan awaiting_shipment (átugrik jóváhagyás)
+        status='awaiting_shipment' if (current_user.role == 'company_admin' and data.get('status') == 'pending_approval') else data.get('status', 'draft'),
         special_instructions=data.get('special_instructions')
     )
     
@@ -1215,6 +1216,18 @@ def create_request(current_user):
                 new_request.id,
                 'pending_approval',
                 f'{current_user.name} beküldött egy laborkérést jóváhagyásra: {new_request.request_number}'
+            )
+    # v7.0.29: Company admin jóváhagyásra küldés → awaiting_shipment → értesítés logistics-nak
+    elif new_request.status == 'awaiting_shipment':
+        logistics_users = User.query.filter(User.role.in_(['university_logistics', 'company_logistics'])).all()
+        for logistics_user in logistics_users:
+            if logistics_user.role == 'company_logistics' and logistics_user.company_id != new_request.company_id:
+                continue
+            create_notification(
+                logistics_user.id,
+                new_request.id,
+                'awaiting_shipment',
+                f'Új kérés szállításra vár: {new_request.request_number}'
             )
     
     # Single commit for request and notifications
@@ -2554,12 +2567,23 @@ def get_stats(current_user):
             LabRequest.status, db.func.sum(LabRequest.total_price)
         ).filter_by(user_id=current_user.id).group_by(LabRequest.status).all()
     
+    # v7.0.29: submitted státusz egyesítése arrived_at_provider-rel (duplikáció fix)
+    by_status_dict = {status: count for status, count in requests_by_status}
+    if 'submitted' in by_status_dict:
+        by_status_dict['arrived_at_provider'] = by_status_dict.get('arrived_at_provider', 0) + by_status_dict['submitted']
+        del by_status_dict['submitted']
+    
+    revenue_by_status_dict = {status: (revenue or 0) for status, revenue in revenue_by_status}
+    if 'submitted' in revenue_by_status_dict:
+        revenue_by_status_dict['arrived_at_provider'] = revenue_by_status_dict.get('arrived_at_provider', 0) + revenue_by_status_dict['submitted']
+        del revenue_by_status_dict['submitted']
+    
     return jsonify({
         'total_requests': total_requests,
-        'by_status': {status: count for status, count in requests_by_status},
+        'by_status': by_status_dict,
         'by_category': {cat: count for cat, count in requests_by_category},
         'total_revenue': total_revenue,
-        'revenue_by_status': {status: (revenue or 0) for status, revenue in revenue_by_status}
+        'revenue_by_status': revenue_by_status_dict
     })
 
 # --- v6.7 Data Definitions ---

@@ -88,11 +88,11 @@ function RequestForm() {
   useEffect(() => {
     // Csak új kérés esetén (nem edit mode) és ha user elérhető
     if (!isEditing && user && user.name && user.phone) {
-      // Csak akkor töltjük ki, ha még üresek a mezők
+      // v7.0.29: Mindig beállítja user adatokkal (előző feltétel eltávolítva)
       setFormData(prev => ({
         ...prev,
-        contact_person: prev.contact_person || user.name,
-        contact_phone: prev.contact_phone || user.phone
+        contact_person: user.name,
+        contact_phone: user.phone
       }));
     }
   }, [user, isEditing]);
