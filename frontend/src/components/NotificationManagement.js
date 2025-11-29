@@ -308,7 +308,7 @@ function RulesTab({ rules, eventTypes, templates, roles, editingRule, setEditing
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
               >
                 {eventTypes.map(et => (
-                  <key={et.id} value={et.id}>{et.event_name}</option>
+                  <option key={et.id} value={et.id}>{et.event_name}</option>
                 ))}
               </select>
             </div>
