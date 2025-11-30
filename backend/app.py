@@ -2911,8 +2911,7 @@ def get_notification_templates(current_user):
             'subject': row[4],
             'body': row[5],
             'variables_used': json.loads(row[6]) if row[6] else [],
-            'created_at': row[7],
-            'updated_at': row[8]
+            'created_at': row[7]
         })
     
     return jsonify({'templates': templates})
