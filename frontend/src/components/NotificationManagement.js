@@ -692,6 +692,7 @@ function NotificationManagement() {
             </div>
           </div>
         </div>
+        </div>
       )}
 
       {/* Templates Tab */}
