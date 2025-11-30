@@ -30,16 +30,16 @@ function NotificationManagement() {
       const token = localStorage.getItem('token');
 
       const [eventsRes, templatesRes, rulesRes, smtpRes] = await Promise.all([
-        fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-event-types`, {
+        fetch(`${process.env.REACT_APP_API_URL}/admin/notification-event-types`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-templates`, {
+        fetch(`${process.env.REACT_APP_API_URL}/admin/notification-templates`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-rules`, {
+        fetch(`${process.env.REACT_APP_API_URL}/admin/notification-rules`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
-        fetch(`${process.env.REACT_APP_API_URL}/api/admin/smtp-settings`, {
+        fetch(`${process.env.REACT_APP_API_URL}/admin/smtp-settings`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
       ]);
@@ -140,7 +140,7 @@ function NotificationManagement() {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-rules`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/notification-rules`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -165,7 +165,7 @@ function NotificationManagement() {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-rules/${ruleId}`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/notification-rules/${ruleId}`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -190,7 +190,7 @@ function NotificationManagement() {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/smtp-settings`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/smtp-settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -214,7 +214,7 @@ function NotificationManagement() {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/smtp-test`, {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/smtp-test`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
