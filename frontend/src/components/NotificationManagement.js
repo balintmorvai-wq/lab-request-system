@@ -520,6 +520,42 @@ function NotificationManagement() {
       {/* Rules Tab */}
       {activeTab === 'rules' && (
         <div className="space-y-4">
+          {/* DEBUG PANEL */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-blue-800 mb-2">🔍 Debug Info</h3>
+            <div className="text-xs text-blue-700 space-y-1">
+              <p><strong>Statuses betöltve:</strong> {statuses.length} db</p>
+              <p><strong>Roles betöltve:</strong> {roles.length} db</p>
+              <p><strong>Templates betöltve:</strong> {templates.length} db</p>
+              <p><strong>Rules betöltve:</strong> {rules.length} db</p>
+              <p><strong>Migration gomb feltétel:</strong> statuses.length ({statuses.length}) &lt; 8 = {statuses.length < 8 ? '✅ TRUE (gomb LÁTSZIK)' : '❌ FALSE (gomb REJTVE)'}</p>
+              {statuses.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer font-semibold">Státuszok lista ({statuses.length})</summary>
+                  <pre className="mt-1 text-xs bg-white p-2 rounded overflow-auto max-h-40">
+                    {JSON.stringify(statuses, null, 2)}
+                  </pre>
+                </details>
+              )}
+              {roles.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer font-semibold">Szerepkörök lista ({roles.length})</summary>
+                  <pre className="mt-1 text-xs bg-white p-2 rounded overflow-auto max-h-40">
+                    {JSON.stringify(roles, null, 2)}
+                  </pre>
+                </details>
+              )}
+              {templates.length > 0 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer font-semibold">Template-ek lista ({templates.length})</summary>
+                  <pre className="mt-1 text-xs bg-white p-2 rounded overflow-auto max-h-40">
+                    {JSON.stringify(templates, null, 2)}
+                  </pre>
+                </details>
+              )}
+            </div>
+          </div>
+
           {/* Migration Info Panel */}
           {statuses.length < 8 && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
