@@ -18,6 +18,10 @@ function NotificationManagement() {
   const [editingTemplate, setEditingTemplate] = useState(null);
   const [isCreatingRule, setIsCreatingRule] = useState(false);
   const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
+  
+  // Migration state
+  const [migrationRunning, setMigrationRunning] = useState(false);
+  const [migrationResult, setMigrationResult] = useState(null);
 
   const roles = [
     { value: 'super_admin', label: 'Super Admin' },
@@ -108,6 +112,50 @@ function NotificationManagement() {
     }
   };
 
+  // v8.0 Migration
+  const runMigration = async () => {
+    if (!window.confirm(
+      '⚠️ FIGYELMEZTETÉS!\n\n' +
+      'Ez törli a régi notifications táblát és létrehozza az új v8.0 struktúrát!\n\n' +
+      '• 7 eseménytípus\n' +
+      '• 5 email sablon\n' +
+      '• 14 alapértelmezett szabály\n' +
+      '• Új notifications tábla\n' +
+      '• SMTP beállítások\n\n' +
+      'Folytatod?'
+    )) return;
+
+    setMigrationRunning(true);
+    setMigrationResult(null);
+
+    try {
+      const response = await fetch(`${API_URL}/admin/migrate-v8`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: true })
+      });
+
+      const result = await response.json();
+      setMigrationResult(result);
+
+      if (result.success) {
+        alert('✅ v8.0 Migration sikeresen lefutott!\n\n' + result.steps.join('\n'));
+        fetchData(); // Reload data
+      } else {
+        alert('❌ Migration hiba!\n\n' + (result.errors || []).join('\n'));
+      }
+    } catch (error) {
+      console.error('Migration error:', error);
+      setMigrationResult({
+        success: false,
+        errors: [error.message]
+      });
+      alert('❌ Migration hiba: ' + error.message);
+    } finally {
+      setMigrationRunning(false);
+    }
+  };
+
   // Template CRUD
   const saveTemplate = async (template) => {
     try {
@@ -181,7 +229,62 @@ function NotificationManagement() {
             Értesítési szabályok és email sablonok konfigurálása
           </p>
         </div>
+        
+        {/* Migration Button */}
+        <button
+          onClick={runMigration}
+          disabled={migrationRunning}
+          className={`px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all ${
+            migrationRunning
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg hover:shadow-xl'
+          }`}
+        >
+          {migrationRunning ? (
+            <>
+              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+              Migration futtatás...
+            </>
+          ) : (
+            <>
+              🚀 Run v8.0 Migration
+            </>
+          )}
+        </button>
       </div>
+      
+      {/* Migration Result */}
+      {migrationResult && (
+        <div className={`p-4 rounded-lg border-2 ${
+          migrationResult.success 
+            ? 'bg-green-50 border-green-200' 
+            : 'bg-red-50 border-red-200'
+        }`}>
+          <h3 className="font-bold mb-2 flex items-center gap-2">
+            {migrationResult.success ? '✅ Migration Sikeres!' : '❌ Migration Hiba!'}
+          </h3>
+          {migrationResult.steps && migrationResult.steps.length > 0 && (
+            <div className="space-y-1 text-sm">
+              {migrationResult.steps.map((step, idx) => (
+                <div key={idx} className="text-green-700">{step}</div>
+              ))}
+            </div>
+          )}
+          {migrationResult.errors && migrationResult.errors.length > 0 && (
+            <div className="space-y-1 text-sm">
+              {migrationResult.errors.map((error, idx) => (
+                <div key={idx} className="text-red-700">❌ {error}</div>
+              ))}
+            </div>
+          )}
+          {migrationResult.started_at && (
+            <div className="text-xs text-gray-500 mt-2">
+              Started: {new Date(migrationResult.started_at).toLocaleString()}
+              {migrationResult.completed_at && ` | Completed: ${new Date(migrationResult.completed_at).toLocaleString()}`}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200">

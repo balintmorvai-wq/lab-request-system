@@ -13,6 +13,7 @@ import {
   Folder,
   Clipboard,  // v7.0
   Truck,  // v7.0.27: Logistics icon
+  Bell,  // v8.0: Notifications icon
   LogOut, 
   Menu, 
   X,
