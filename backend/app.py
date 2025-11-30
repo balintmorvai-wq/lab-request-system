@@ -2776,11 +2776,11 @@ def delete_notification(current_user, notification_id):
 @role_required('super_admin')
 def get_notification_event_types(current_user):
     """Notification event típusok listája"""
-    cursor = db.session.execute("""
+    cursor = db.session.execute(text("""
         SELECT id, event_key, event_name, description, available_variables
         FROM notification_event_types
         ORDER BY id
-    """)
+    """))
     
     events = []
     for row in cursor:
@@ -2799,7 +2799,7 @@ def get_notification_event_types(current_user):
 @role_required('super_admin')
 def get_notification_rules(current_user):
     """Notification rules listája"""
-    cursor = db.session.execute("""
+    cursor = db.session.execute(text("""
         SELECT nr.id, nr.event_type_id, net.event_name, net.event_key,
                nr.role, nr.event_filter, nr.in_app_enabled, nr.email_enabled,
                nr.email_template_id, nt.name as template_name,
@@ -2808,7 +2808,7 @@ def get_notification_rules(current_user):
         JOIN notification_event_types net ON nr.event_type_id = net.id
         LEFT JOIN notification_templates nt ON nr.email_template_id = nt.id
         ORDER BY nr.event_type_id, nr.priority DESC, nr.role
-    """)
+    """))
     
     rules = []
     for row in cursor:
@@ -2836,27 +2836,23 @@ def create_notification_rule(current_user):
     """Notification rule létrehozása"""
     data = request.get_json()
     
-    cursor = db.session.execute("""
-        INSERT INTO notification_rules 
-        (event_type_id, role, event_filter, in_app_enabled, email_enabled, 
-         email_template_id, priority, is_active)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data['event_type_id'],
-        data['role'],
-        json.dumps(data.get('event_filter')) if data.get('event_filter') else None,
-        data.get('in_app_enabled', True),
-        data.get('email_enabled', False),
-        data.get('email_template_id'),
-        data.get('priority', 0),
-        data.get('is_active', True)
-    ))
+    rule = NotificationRule(
+        event_type_id=data['event_type_id'],
+        role=data['role'],
+        event_filter=json.dumps(data.get('event_filter')) if data.get('event_filter') else None,
+        in_app_enabled=data.get('in_app_enabled', True),
+        email_enabled=data.get('email_enabled', False),
+        email_template_id=data.get('email_template_id'),
+        priority=data.get('priority', 0),
+        is_active=data.get('is_active', True)
+    )
     
+    db.session.add(rule)
     db.session.commit()
     
     return jsonify({
         'message': 'Értesítési szabály létrehozva!',
-        'id': cursor.lastrowid
+        'id': rule.id
     }), 201
 
 @app.route('/api/admin/notification-rules/<int:rule_id>', methods=['PUT'])
@@ -2866,18 +2862,18 @@ def update_notification_rule(current_user, rule_id):
     """Notification rule frissítése"""
     data = request.get_json()
     
-    db.session.execute("""
+    db.session.execute(text("""
         UPDATE notification_rules
-        SET event_type_id = ?,
-            role = ?,
-            event_filter = ?,
-            in_app_enabled = ?,
-            email_enabled = ?,
-            email_template_id = ?,
-            priority = ?,
-            is_active = ?,
-            updated_at = ?
-        WHERE id = ?
+        SET event_type_id = :p0,
+            role = :p1,
+            event_filter = :p2,
+            in_app_enabled = :p3,
+            email_enabled = :p4,
+            email_template_id = :p5,
+            priority = :p6,
+            is_active = :p7,
+            updated_at = :p8
+        WHERE id = :p9
     """, (
         data['event_type_id'],
         data['role'],
@@ -2900,7 +2896,7 @@ def update_notification_rule(current_user, rule_id):
 @role_required('super_admin')
 def delete_notification_rule(current_user, rule_id):
     """Notification rule törlése"""
-    db.session.execute("DELETE FROM notification_rules WHERE id = ?", (rule_id,))
+    db.session.execute(text("DELETE FROM notification_rules WHERE id = :id"), {"id": rule_id,})
     db.session.commit()
     
     return jsonify({'message': 'Értesítési szabály törölve!'})
@@ -2910,14 +2906,14 @@ def delete_notification_rule(current_user, rule_id):
 @role_required('super_admin')
 def get_notification_templates(current_user):
     """Email template-ek listája"""
-    cursor = db.session.execute("""
+    cursor = db.session.execute(text("""
         SELECT nt.id, nt.name, nt.event_type_id, net.event_name,
                nt.subject, nt.body, nt.variables_used,
                nt.created_at, nt.updated_at
         FROM notification_templates nt
         JOIN notification_event_types net ON nt.event_type_id = net.id
         ORDER BY nt.event_type_id, nt.name
-    """)
+    """))
     
     templates = []
     for row in cursor:
@@ -2942,10 +2938,10 @@ def create_notification_template(current_user):
     """Email template létrehozása"""
     data = request.get_json()
     
-    cursor = db.session.execute("""
+    cursor = db.session.execute(text("""
         INSERT INTO notification_templates 
         (name, event_type_id, subject, body, variables_used)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (:p0, :p1, :p2, :p3, :p4)
     """, (
         data['name'],
         data['event_type_id'],
@@ -2968,15 +2964,15 @@ def update_notification_template(current_user, template_id):
     """Email template frissítése"""
     data = request.get_json()
     
-    db.session.execute("""
+    db.session.execute(text("""
         UPDATE notification_templates
-        SET name = ?,
-            event_type_id = ?,
-            subject = ?,
-            body = ?,
-            variables_used = ?,
-            updated_at = ?
-        WHERE id = ?
+        SET name = :p0,
+            event_type_id = :p1,
+            subject = :p2,
+            body = :p3,
+            variables_used = :p4,
+            updated_at = :p5
+        WHERE id = :p6
     """, (
         data['name'],
         data['event_type_id'],
@@ -2997,15 +2993,15 @@ def update_notification_template(current_user, template_id):
 def delete_notification_template(current_user, template_id):
     """Email template törlése"""
     # Ellenőrzés: van-e használatban
-    cursor = db.session.execute("""
-        SELECT COUNT(*) FROM notification_rules WHERE email_template_id = ?
+    cursor = db.session.execute(text("""
+        SELECT COUNT(*) FROM notification_rules WHERE email_template_id = :p0
     """, (template_id,))
     
     count = cursor.fetchone()[0]
     if count > 0:
         return jsonify({'message': f'A sablon {count} szabályban használatban van! Először töröld a szabályokat.'}), 400
     
-    db.session.execute("DELETE FROM notification_templates WHERE id = ?", (template_id,))
+    db.session.execute(text("DELETE FROM notification_templates WHERE id = :id"), {"id": template_id,})
     db.session.commit()
     
     return jsonify({'message': 'Email sablon törölve!'})

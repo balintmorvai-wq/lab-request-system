@@ -293,16 +293,16 @@ class NotificationService:
                    net.event_key, net.event_name, n.event_data
             FROM notifications n
             JOIN notification_event_types net ON n.event_type_id = net.id
-            WHERE n.user_id = ?
+            WHERE n.user_id = :user_id
         """
         
-        params = [user_id]
+        params = {"user_id": user_id}
         
         if unread_only:
             query += " AND n.is_read = 0"
         
-        query += " ORDER BY n.created_at DESC LIMIT ?"
-        params.append(limit)
+        query += " ORDER BY n.created_at DESC LIMIT :limit"
+        params["limit"] = limit
         
         cursor = db.session.execute(text(query), params)
         
