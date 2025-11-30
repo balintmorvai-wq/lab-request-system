@@ -261,7 +261,100 @@ class TestResult(db.Model):
     completed_by = db.relationship('User', foreign_keys=[completed_by_user_id], backref='completed_test_results')
     validated_by = db.relationship('User', foreign_keys=[validated_by_user_id], backref='validated_test_results')  # v7.0.3
 
-# v8.0: Notification model ELTÁVOLÍTVA - új notification rendszer használata
+# ============================================
+# v8.0: ABSTRACT NOTIFICATION SYSTEM MODELS
+# ============================================
+
+class NotificationEventType(db.Model):
+    """
+    Értesítési eseménytípusok (pl. status_change, new_request)
+    """
+    __tablename__ = 'notification_event_types'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    event_key = db.Column(db.String(50), unique=True, nullable=False)
+    event_name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    available_variables = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+class NotificationTemplate(db.Model):
+    """
+    Email sablonok értesítésekhez
+    """
+    __tablename__ = 'notification_templates'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    event_type_id = db.Column(db.Integer, db.ForeignKey('notification_event_types.id'), nullable=False)
+    subject = db.Column(db.String(200), nullable=False)
+    body_html = db.Column(db.Text, nullable=False)
+    variables_used = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    
+    event_type = db.relationship('NotificationEventType', backref='templates')
+
+class NotificationRule(db.Model):
+    """
+    Értesítési szabályok - ki, mikor, hogyan kapjon értesítést
+    """
+    __tablename__ = 'notification_rules'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    event_type_id = db.Column(db.Integer, db.ForeignKey('notification_event_types.id'), nullable=False)
+    role = db.Column(db.String(50), nullable=False)
+    event_filter = db.Column(db.Text)
+    in_app_enabled = db.Column(db.Integer, default=1)
+    email_enabled = db.Column(db.Integer, default=0)
+    email_template_id = db.Column(db.Integer, db.ForeignKey('notification_templates.id'), nullable=True)
+    priority = db.Column(db.Integer, default=5)
+    is_active = db.Column(db.Integer, default=1)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    
+    event_type = db.relationship('NotificationEventType', backref='rules')
+    email_template = db.relationship('NotificationTemplate', foreign_keys=[email_template_id])
+
+class Notification(db.Model):
+    """
+    Tényleges értesítések (új event-alapú struktúra)
+    """
+    __tablename__ = 'notifications'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    event_type_id = db.Column(db.Integer, db.ForeignKey('notification_event_types.id'), nullable=False)
+    event_data = db.Column(db.Text)
+    message = db.Column(db.Text, nullable=False)
+    link_url = db.Column(db.String(200))
+    request_id = db.Column(db.Integer, db.ForeignKey('lab_request.id'), nullable=True)
+    is_read = db.Column(db.Integer, default=0)
+    read_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    
+    user = db.relationship('User', backref='notifications')
+    event_type = db.relationship('NotificationEventType', backref='notifications')
+    request = db.relationship('LabRequest', backref='notifications')
+
+class SMTPSettings(db.Model):
+    """
+    SMTP beállítások email küldéshez
+    """
+    __tablename__ = 'smtp_settings'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    smtp_host = db.Column(db.String(100))
+    smtp_port = db.Column(db.Integer, default=587)
+    smtp_username = db.Column(db.String(100))
+    smtp_password = db.Column(db.String(200))
+    from_email = db.Column(db.String(100))
+    from_name = db.Column(db.String(100))
+    use_tls = db.Column(db.Integer, default=1)
+    is_active = db.Column(db.Integer, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+# ============================================
+# END OF v8.0 NOTIFICATION MODELS
+# ============================================
 
 # --- Request Number Generator ---
 def generate_request_number(company_short_name):
