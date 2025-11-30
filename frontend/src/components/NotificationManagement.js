@@ -532,13 +532,24 @@ function NotificationManagement() {
         <div className="space-y-4">
           {/* DEBUG PANEL */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-blue-800 mb-2">🔍 Debug Info</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-blue-800">🔍 Debug Info</h3>
+              <button
+                onClick={runMigration}
+                disabled={saving}
+                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-1"
+              >
+                <Settings className="w-3 h-3" />
+                <span>{saving ? 'Futtatás...' : 'Force Migration'}</span>
+              </button>
+            </div>
             <div className="text-xs text-blue-700 space-y-1">
               <p><strong>Statuses betöltve:</strong> {statuses.length} db</p>
               <p><strong>Roles betöltve:</strong> {roles.length} db</p>
               <p><strong>Templates betöltve:</strong> {templates.length} db</p>
               <p><strong>Rules betöltve:</strong> {rules.length} db</p>
-              <p><strong>Migration gomb feltétel:</strong> statuses.length ({statuses.length}) &lt; 8 = {statuses.length < 8 ? '✅ TRUE (gomb LÁTSZIK)' : '❌ FALSE (gomb REJTVE)'}</p>
+              <p><strong>Státuszok event_type_id-val:</strong> {statuses.filter(s => s.event_type_id).length} / {statuses.length}</p>
+              <p><strong>Migration gomb feltétel:</strong> statuses.some(s =&gt; !s.event_type_id) = {statuses.some(s => !s.event_type_id) ? '✅ TRUE (gomb LÁTSZIK)' : '❌ FALSE (gomb REJTVE)'}</p>
               {statuses.length > 0 && (
                 <details className="mt-2">
                   <summary className="cursor-pointer font-semibold">Státuszok lista ({statuses.length})</summary>
@@ -575,7 +586,7 @@ function NotificationManagement() {
           </div>
 
           {/* Migration Info Panel */}
-          {statuses.length < 8 && (
+          {statuses.length > 0 && statuses.some(s => !s.event_type_id) && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -583,11 +594,11 @@ function NotificationManagement() {
                     ⚠️ Státusz események hiányoznak
                   </h3>
                   <p className="text-sm text-yellow-700 mb-2">
-                    A státusz-alapú értesítési rendszerhez szükséges 8 eseménytípus még nincs létrehozva.
+                    A státusz-alapú értesítési rendszerhez szükséges event type-ok még nincsenek létrehozva.
                     Futtasd le a v8.1 migration-t a hiányzó események hozzáadásához.
                   </p>
                   <p className="text-xs text-yellow-600">
-                    Várható: 8 státusz esemény (draft, pending_approval, awaiting_shipment, in_transit, arrived_at_provider, in_progress, validation_pending, completed)
+                    Hiányzó event type-ok: {statuses.filter(s => !s.event_type_id).map(s => s.name).join(', ')}
                   </p>
                 </div>
                 <button

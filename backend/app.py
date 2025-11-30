@@ -2836,15 +2836,20 @@ def create_notification_rule(current_user):
     """Notification rule létrehozása"""
     data = request.get_json()
     
+    # Boolean -> Integer konverzió (SQLite miatt)
+    in_app_enabled = 1 if data.get('in_app_enabled', True) else 0
+    email_enabled = 1 if data.get('email_enabled', False) else 0
+    is_active = 1 if data.get('is_active', True) else 0
+    
     rule = NotificationRule(
         event_type_id=data['event_type_id'],
         role=data['role'],
         event_filter=json.dumps(data.get('event_filter')) if data.get('event_filter') else None,
-        in_app_enabled=data.get('in_app_enabled', True),
-        email_enabled=data.get('email_enabled', False),
+        in_app_enabled=in_app_enabled,
+        email_enabled=email_enabled,
         email_template_id=data.get('email_template_id'),
-        priority=data.get('priority', 0),
-        is_active=data.get('is_active', True)
+        priority=data.get('priority', 5),
+        is_active=is_active
     )
     
     db.session.add(rule)
@@ -2863,14 +2868,16 @@ def update_notification_rule(current_user, rule_id):
     data = request.get_json()
     
     rule = NotificationRule.query.get_or_404(rule_id)
+    
+    # Boolean -> Integer konverzió (SQLite miatt)
     rule.event_type_id = data['event_type_id']
     rule.role = data['role']
     rule.event_filter = json.dumps(data.get('event_filter')) if data.get('event_filter') else None
-    rule.in_app_enabled = data.get('in_app_enabled', True)
-    rule.email_enabled = data.get('email_enabled', False)
+    rule.in_app_enabled = 1 if data.get('in_app_enabled', True) else 0
+    rule.email_enabled = 1 if data.get('email_enabled', False) else 0
     rule.email_template_id = data.get('email_template_id')
-    rule.priority = data.get('priority', 0)
-    rule.is_active = data.get('is_active', True)
+    rule.priority = data.get('priority', 5)
+    rule.is_active = 1 if data.get('is_active', True) else 0
     
     db.session.commit()
     
