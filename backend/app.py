@@ -2893,7 +2893,7 @@ def delete_notification_rule(current_user, rule_id):
 def get_notification_templates(current_user):
     """Email template-ek listája"""
     cursor = db.session.execute(text("""
-        SELECT nt.id, nt.name, nt.event_type_id, net.event_name,
+        SELECT nt.id, nt.name, nt.event_type_id, net.event_name, net.event_key,
                nt.subject, nt.body_html, nt.variables_used,
                nt.created_at
         FROM notification_templates nt
@@ -2908,10 +2908,11 @@ def get_notification_templates(current_user):
             'name': row[1],
             'event_type_id': row[2],
             'event_name': row[3],
-            'subject': row[4],
-            'body': row[5],
-            'variables_used': json.loads(row[6]) if row[6] else [],
-            'created_at': row[7]
+            'event_key': row[4],
+            'subject': row[5],
+            'body': row[6],
+            'variables_used': json.loads(row[7]) if row[7] else [],
+            'created_at': row[8]
         })
     
     return jsonify({'templates': templates})
@@ -3123,7 +3124,7 @@ def test_smtp(current_user):
 def get_notification_statuses(current_user):
     """Elérhető státuszok listája értesítési rendszerhez"""
     # LabRequest workflow státuszok
-    statuses = [
+    status_definitions = [
         {'key': 'draft', 'name': 'Vázlat', 'description': 'Kérés vázlat készítés alatt'},
         {'key': 'pending_approval', 'name': 'Jóváhagyásra vár', 'description': 'Cég admin jóváhagyására vár'},
         {'key': 'awaiting_shipment', 'name': 'Szállításra vár', 'description': 'Jóváhagyva, mintaszállításra vár'},
@@ -3133,6 +3134,25 @@ def get_notification_statuses(current_user):
         {'key': 'validation_pending', 'name': 'Validálásra vár', 'description': 'Eredmények validálásra várnak'},
         {'key': 'completed', 'name': 'Befejezett', 'description': 'Kérés befejezve, eredmények validálva'}
     ]
+    
+    # Minden státuszhoz lekérjük az event_type_id-t
+    statuses = []
+    for status_def in status_definitions:
+        event_key = f"status_to_{status_def['key']}"
+        
+        # Keresünk event_type-ot ezzel a kulccsal
+        event_type = db.session.execute(
+            text("SELECT id FROM notification_event_types WHERE event_key = :key"),
+            {"key": event_key}
+        ).fetchone()
+        
+        statuses.append({
+            'key': status_def['key'],
+            'name': status_def['name'],
+            'description': status_def['description'],
+            'event_type_id': event_type[0] if event_type else None,
+            'event_key': event_key
+        })
     
     return jsonify({'statuses': statuses})
 

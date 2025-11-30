@@ -86,10 +86,9 @@ function NotificationManagement() {
 
   // Get event_type_id for status
   const getEventTypeIdForStatus = (statusKey) => {
-    const eventKey = `status_to_${statusKey}`;
-    // Keresünk egy rule-t ami ezt használja és lekérjük az event_type_id-t
-    const rule = rules.find(r => r.event_key === eventKey);
-    return rule?.event_type_id || null;
+    // Közvetlenül a statuses tömbből vesszük az event_type_id-t
+    const status = statuses.find(s => s.key === statusKey);
+    return status?.event_type_id || null;
   };
 
   // Toggle in-app notification
@@ -153,7 +152,8 @@ function NotificationManagement() {
         return;
       }
       
-      const defaultTemplate = templates.find(t => t.event_key === eventKey);
+      // Keresünk default template-et event_type_id alapján
+      const defaultTemplate = templates.find(t => t.event_type_id === eventTypeId);
       
       await createRule({
         event_type_id: eventTypeId,
@@ -266,13 +266,23 @@ function NotificationManagement() {
       const token = localStorage.getItem('token');
       
       // Find event_type_id for the selected status
-      const status = statuses.find(s => templateForm.event_key === `status_to_${s.key}`);
-      if (!status && !editingTemplate.id) {
-        showMessage('Válassz státuszt!', 'error');
-        return;
-      }
+      let eventTypeId = null;
       
-      const eventTypeId = editingTemplate.id ? editingTemplate.event_type_id : getEventTypeIdForStatus(status?.key);
+      if (editingTemplate.id) {
+        // Editing existing template - keep the same event_type_id
+        eventTypeId = editingTemplate.event_type_id;
+      } else {
+        // New template - extract status key from event_key (format: status_to_STATUSKEY)
+        const statusKey = templateForm.event_key.replace('status_to_', '');
+        const status = statuses.find(s => s.key === statusKey);
+        
+        if (!status || !status.event_type_id) {
+          showMessage('Érvénytelen státusz vagy hiányzó event type!', 'error');
+          return;
+        }
+        
+        eventTypeId = status.event_type_id;
+      }
       
       const templateData = {
         name: templateForm.name,
@@ -535,6 +545,14 @@ function NotificationManagement() {
                   <pre className="mt-1 text-xs bg-white p-2 rounded overflow-auto max-h-40">
                     {JSON.stringify(statuses, null, 2)}
                   </pre>
+                  <div className="mt-2 text-xs">
+                    <strong>Event Type ID-k:</strong>
+                    {statuses.map(s => (
+                      <div key={s.key} className={`${s.event_type_id ? 'text-green-700' : 'text-red-700'}`}>
+                        • {s.key}: {s.event_type_id ? `ID=${s.event_type_id} ✅` : '❌ HIÁNYZIK!'}
+                      </div>
+                    ))}
+                  </div>
                 </details>
               )}
               {roles.length > 0 && (
@@ -642,8 +660,8 @@ function NotificationManagement() {
               {/* Body */}
               <tbody className="bg-white divide-y divide-gray-200">
                 {statuses.map(status => {
-                  const eventKey = `status_to_${status.key}`;
-                  const statusTemplates = templates.filter(t => t.event_key === eventKey);
+                  // Templates filterezése event_type_id alapján
+                  const statusTemplates = templates.filter(t => t.event_type_id === status.event_type_id);
 
                   return (
                     <tr key={status.key} className="hover:bg-gray-50">
