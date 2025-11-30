@@ -1,24 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Settings, CheckCircle, XCircle, Mail } from 'lucide-react';
+import { Bell, Settings, CheckCircle, XCircle, Mail, Edit2, Plus, Trash2, Save } from 'lucide-react';
 
 function NotificationManagement() {
-  const [activeTab, setActiveTab] = useState('rules'); // 'rules' | 'smtp'
-  const [eventTypes, setEventTypes] = useState([]);
+  const [activeTab, setActiveTab] = useState('rules'); // 'rules' | 'templates' | 'smtp'
+  const [statuses, setStatuses] = useState([]);
+  const [roles, setRoles] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [rules, setRules] = useState([]);
   const [smtpSettings, setSmtpSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
-
-  const roleNames = {
-    company_user: 'Cég dolgozó',
-    company_admin: 'Cég Admin',
-    labor_staff: 'Labor',
-    super_admin: 'Admin'
-  };
-
-  const roleOrder = ['company_user', 'company_admin', 'labor_staff', 'super_admin'];
+  
+  // Template editor state
+  const [editingTemplate, setEditingTemplate] = useState(null);
+  const [templateForm, setTemplateForm] = useState({
+    name: '',
+    event_key: '',
+    subject: '',
+    body: ''
+  });
 
   useEffect(() => {
     loadData();
@@ -29,8 +30,11 @@ function NotificationManagement() {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      const [eventsRes, templatesRes, rulesRes, smtpRes] = await Promise.all([
-        fetch(`${process.env.REACT_APP_API_URL}/admin/notification-event-types`, {
+      const [statusesRes, rolesRes, templatesRes, rulesRes, smtpRes] = await Promise.all([
+        fetch(`${process.env.REACT_APP_API_URL}/admin/notification-statuses`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${process.env.REACT_APP_API_URL}/admin/notification-roles`, {
           headers: { 'Authorization': `Bearer ${token}` }
         }),
         fetch(`${process.env.REACT_APP_API_URL}/admin/notification-templates`, {
@@ -44,15 +48,17 @@ function NotificationManagement() {
         })
       ]);
 
-      const events = await eventsRes.json();
-      const temps = await templatesRes.json();
+      const statusData = await statusesRes.json();
+      const rolesData = await rolesRes.json();
+      const tempsData = await templatesRes.json();
       const rulesData = await rulesRes.json();
-      const smtp = await smtpRes.json();
+      const smtpData = await smtpRes.json();
 
-      setEventTypes(events.event_types || []);
-      setTemplates(temps.templates || []);
+      setStatuses(statusData.statuses || []);
+      setRoles(rolesData.roles || []);
+      setTemplates(tempsData.templates || []);
       setRules(rulesData.rules || []);
-      setSmtpSettings(smtp.settings || {
+      setSmtpSettings(smtpData.settings || {
         smtp_host: 'smtp.gmail.com',
         smtp_port: 587,
         smtp_username: '',
@@ -64,32 +70,55 @@ function NotificationManagement() {
       });
     } catch (error) {
       console.error('Load error:', error);
-      setMessage({ text: 'Hiba az adatok betöltésekor!', type: 'error' });
+      showMessage('Hiba az adatok betöltésekor!', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Get rule for event + role
-  const getRule = (eventId, role) => {
-    return rules.find(r => r.event_type_id === eventId && r.role === role);
+  // Get rule for status + role
+  const getRule = (statusKey, roleKey) => {
+    // Keresünk event_key-vel ami "status_to_X" formátumú
+    const eventKey = `status_to_${statusKey}`;
+    return rules.find(r => r.event_key === eventKey && r.role === roleKey);
+  };
+
+  // Get event_type_id for status
+  const getEventTypeIdForStatus = (statusKey) => {
+    const eventKey = `status_to_${statusKey}`;
+    // Keresünk egy rule-t ami ezt használja és lekérjük az event_type_id-t
+    const rule = rules.find(r => r.event_key === eventKey);
+    return rule?.event_type_id || null;
   };
 
   // Toggle in-app notification
-  const toggleInApp = async (eventId, role) => {
-    const rule = getRule(eventId, role);
+  const toggleInApp = async (statusKey, roleKey) => {
+    const rule = getRule(statusKey, roleKey);
+    const eventKey = `status_to_${statusKey}`;
     
     if (rule) {
       // Update existing rule
       await updateRule(rule.id, {
-        ...rule,
-        in_app_enabled: !rule.in_app_enabled
+        event_type_id: rule.event_type_id,
+        role: roleKey,
+        event_filter: rule.event_filter,
+        in_app_enabled: !rule.in_app_enabled,
+        email_enabled: rule.email_enabled,
+        email_template_id: rule.email_template_id,
+        priority: rule.priority || 5,
+        is_active: true
       });
     } else {
-      // Create new rule
+      // Create new rule - need event_type_id
+      const eventTypeId = getEventTypeIdForStatus(statusKey);
+      if (!eventTypeId) {
+        showMessage('Event type nem található!', 'error');
+        return;
+      }
+      
       await createRule({
-        event_type_id: eventId,
-        role: role,
+        event_type_id: eventTypeId,
+        role: roleKey,
         in_app_enabled: true,
         email_enabled: false,
         email_template_id: null,
@@ -100,21 +129,34 @@ function NotificationManagement() {
   };
 
   // Toggle email notification
-  const toggleEmail = async (eventId, role) => {
-    const rule = getRule(eventId, role);
+  const toggleEmail = async (statusKey, roleKey) => {
+    const rule = getRule(statusKey, roleKey);
+    const eventKey = `status_to_${statusKey}`;
     
     if (rule) {
       await updateRule(rule.id, {
-        ...rule,
-        email_enabled: !rule.email_enabled
+        event_type_id: rule.event_type_id,
+        role: roleKey,
+        event_filter: rule.event_filter,
+        in_app_enabled: rule.in_app_enabled,
+        email_enabled: !rule.email_enabled,
+        email_template_id: rule.email_template_id,
+        priority: rule.priority || 5,
+        is_active: true
       });
     } else {
       // Create new rule with email enabled
-      const defaultTemplate = templates.find(t => t.event_type_id === eventId);
+      const eventTypeId = getEventTypeIdForStatus(statusKey);
+      if (!eventTypeId) {
+        showMessage('Event type nem található!', 'error');
+        return;
+      }
+      
+      const defaultTemplate = templates.find(t => t.event_key === eventKey);
       
       await createRule({
-        event_type_id: eventId,
-        role: role,
+        event_type_id: eventTypeId,
+        role: roleKey,
         in_app_enabled: false,
         email_enabled: true,
         email_template_id: defaultTemplate?.id || null,
@@ -125,13 +167,19 @@ function NotificationManagement() {
   };
 
   // Change email template
-  const changeTemplate = async (eventId, role, templateId) => {
-    const rule = getRule(eventId, role);
+  const changeTemplate = async (statusKey, roleKey, templateId) => {
+    const rule = getRule(statusKey, roleKey);
     
     if (rule) {
       await updateRule(rule.id, {
-        ...rule,
-        email_template_id: templateId ? parseInt(templateId) : null
+        event_type_id: rule.event_type_id,
+        role: roleKey,
+        event_filter: rule.event_filter,
+        in_app_enabled: rule.in_app_enabled,
+        email_enabled: rule.email_enabled,
+        email_template_id: templateId ? parseInt(templateId) : null,
+        priority: rule.priority || 5,
+        is_active: true
       });
     }
   };
@@ -150,8 +198,10 @@ function NotificationManagement() {
       });
 
       if (response.ok) {
-        await loadData(); // Reload to get updated data
+        await loadData();
         showMessage('Szabály létrehozva!', 'success');
+      } else {
+        showMessage('Hiba a szabály létrehozásakor!', 'error');
       }
     } catch (error) {
       console.error('Create error:', error);
@@ -177,10 +227,111 @@ function NotificationManagement() {
       if (response.ok) {
         await loadData();
         showMessage('Szabály frissítve!', 'success');
+      } else {
+        showMessage('Hiba a frissítéskor!', 'error');
       }
     } catch (error) {
       console.error('Update error:', error);
       showMessage('Hiba a frissítéskor!', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Template CRUD
+  const openTemplateEditor = (template = null) => {
+    if (template) {
+      setEditingTemplate(template);
+      setTemplateForm({
+        name: template.name,
+        event_key: template.event_key || '',
+        subject: template.subject,
+        body: template.body
+      });
+    } else {
+      setEditingTemplate({});
+      setTemplateForm({
+        name: '',
+        event_key: '',
+        subject: '',
+        body: ''
+      });
+    }
+  };
+
+  const saveTemplate = async () => {
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      
+      // Find event_type_id for the selected status
+      const status = statuses.find(s => templateForm.event_key === `status_to_${s.key}`);
+      if (!status && !editingTemplate.id) {
+        showMessage('Válassz státuszt!', 'error');
+        return;
+      }
+      
+      const eventTypeId = editingTemplate.id ? editingTemplate.event_type_id : getEventTypeIdForStatus(status?.key);
+      
+      const templateData = {
+        name: templateForm.name,
+        event_type_id: eventTypeId,
+        subject: templateForm.subject,
+        body: templateForm.body,
+        variables_used: [] // Auto-detect later
+      };
+      
+      const url = editingTemplate.id 
+        ? `${process.env.REACT_APP_API_URL}/admin/notification-templates/${editingTemplate.id}`
+        : `${process.env.REACT_APP_API_URL}/admin/notification-templates`;
+      
+      const method = editingTemplate.id ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(templateData)
+      });
+
+      if (response.ok) {
+        await loadData();
+        setEditingTemplate(null);
+        showMessage(editingTemplate.id ? 'Sablon frissítve!' : 'Sablon létrehozva!', 'success');
+      } else {
+        showMessage('Hiba a sablon mentésekor!', 'error');
+      }
+    } catch (error) {
+      console.error('Template save error:', error);
+      showMessage('Hiba a sablon mentésekor!', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteTemplate = async (templateId) => {
+    if (!window.confirm('Biztosan törölni szeretnéd ezt a sablont?')) return;
+    
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/notification-templates/${templateId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        await loadData();
+        showMessage('Sablon törölve!', 'success');
+      } else {
+        const data = await response.json();
+        showMessage(data.message || 'Hiba a törléskor!', 'error');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      showMessage('Hiba a törléskor!', 'error');
     } finally {
       setSaving(false);
     }
@@ -242,6 +393,13 @@ function NotificationManagement() {
     setTimeout(() => setMessage(''), 3000);
   };
 
+  const insertVariable = (varName) => {
+    setTemplateForm({
+      ...templateForm,
+      body: templateForm.body + `{{${varName}}}`
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -258,7 +416,7 @@ function NotificationManagement() {
           <Bell className="w-8 h-8 text-indigo-600" />
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Értesítési Rendszer</h1>
-            <p className="text-sm text-gray-500">Értesítések kezelése szerepkörönként</p>
+            <p className="text-sm text-gray-500">Státusz-alapú értesítések kezelése</p>
           </div>
         </div>
 
@@ -273,6 +431,17 @@ function NotificationManagement() {
             }`}
           >
             Szabályok
+          </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
+              activeTab === 'templates'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <Edit2 className="w-4 h-4" />
+            <span>Sablonok</span>
           </button>
           <button
             onClick={() => setActiveTab('smtp')}
@@ -306,12 +475,12 @@ function NotificationManagement() {
               {/* Header */}
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">
-                    Esemény
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" style={{width: '200px'}}>
+                    Státusz
                   </th>
-                  {roleOrder.map(role => (
-                    <th key={role} className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {roleNames[role]}
+                  {roles.map(role => (
+                    <th key={role.key} className="px-4 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" style={{width: '140px'}}>
+                      {role.name}
                     </th>
                   ))}
                 </tr>
@@ -319,67 +488,73 @@ function NotificationManagement() {
 
               {/* Body */}
               <tbody className="bg-white divide-y divide-gray-200">
-                {eventTypes.map(event => (
-                  <tr key={event.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{event.event_name}</div>
-                      <div className="text-xs text-gray-500">{event.description}</div>
-                    </td>
+                {statuses.map(status => {
+                  const eventKey = `status_to_${status.key}`;
+                  const statusTemplates = templates.filter(t => t.event_key === eventKey);
 
-                    {roleOrder.map(role => {
-                      const rule = getRule(event.id, role);
-                      const eventTemplates = templates.filter(t => t.event_type_id === event.id);
+                  return (
+                    <tr key={status.key} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{status.name}</div>
+                        <div className="text-xs text-gray-500">{status.description}</div>
+                      </td>
 
-                      return (
-                        <td key={role} className="px-6 py-4 text-center">
-                          <div className="space-y-2">
-                            {/* In-App Checkbox */}
-                            <label className="flex items-center justify-center space-x-2 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={rule?.in_app_enabled || false}
-                                onChange={() => toggleInApp(event.id, role)}
-                                disabled={saving}
-                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                              />
-                              <span className="text-sm text-gray-700">App</span>
-                            </label>
+                      {roles.map(role => {
+                        const rule = getRule(status.key, role.key);
 
-                            {/* Email Checkbox + Template */}
-                            {eventTemplates.length > 0 && (
-                              <div className="space-y-1">
-                                <label className="flex items-center justify-center space-x-2 cursor-pointer">
+                        return (
+                          <td key={role.key} className="px-4 py-4 text-center" style={{height: '100px'}}>
+                            <div className="flex flex-col items-center justify-start space-y-2">
+                              {/* In-App Checkbox */}
+                              <label className="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={rule?.in_app_enabled || false}
+                                  onChange={() => toggleInApp(status.key, role.key)}
+                                  disabled={saving}
+                                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                />
+                                <span className="text-xs text-gray-700">App</span>
+                              </label>
+
+                              {/* Email Checkbox */}
+                              {statusTemplates.length > 0 && (
+                                <label className="flex items-center space-x-2 cursor-pointer">
                                   <input
                                     type="checkbox"
                                     checked={rule?.email_enabled || false}
-                                    onChange={() => toggleEmail(event.id, role)}
+                                    onChange={() => toggleEmail(status.key, role.key)}
                                     disabled={saving}
                                     className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
                                   />
                                   <Mail className="w-4 h-4 text-gray-500" />
                                 </label>
+                              )}
 
-                                {rule?.email_enabled && (
+                              {/* Email Template Selector - ALWAYS VISIBLE BUT DISABLED */}
+                              <div style={{height: '32px', width: '100%'}}>
+                                {statusTemplates.length > 0 && (
                                   <select
-                                    value={rule.email_template_id || ''}
-                                    onChange={(e) => changeTemplate(event.id, role, e.target.value)}
-                                    disabled={saving}
-                                    className="text-xs border-gray-300 rounded px-2 py-1 w-full"
+                                    value={rule?.email_template_id || ''}
+                                    onChange={(e) => changeTemplate(status.key, role.key, e.target.value)}
+                                    disabled={saving || !rule?.email_enabled}
+                                    className="text-xs border-gray-300 rounded px-2 py-1 w-full disabled:opacity-50"
+                                    style={{fontSize: '11px'}}
                                   >
                                     <option value="">Sablon...</option>
-                                    {eventTemplates.map(t => (
+                                    {statusTemplates.map(t => (
                                       <option key={t.id} value={t.id}>{t.name}</option>
                                     ))}
                                   </select>
                                 )}
                               </div>
-                            )}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -399,6 +574,151 @@ function NotificationManagement() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Templates Tab */}
+      {activeTab === 'templates' && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">Email Sablonok</h2>
+            <button
+              onClick={() => openTemplateEditor()}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center space-x-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Új Sablon</span>
+            </button>
+          </div>
+
+          {editingTemplate ? (
+            // Template Editor
+            <div className="space-y-4 border-t border-gray-200 pt-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-md font-medium text-gray-900">
+                  {editingTemplate.id ? 'Sablon Szerkesztése' : 'Új Sablon'}
+                </h3>
+                <button
+                  onClick={() => setEditingTemplate(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sablon Neve</label>
+                  <input
+                    type="text"
+                    value={templateForm.name}
+                    onChange={(e) => setTemplateForm({...templateForm, name: e.target.value})}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    placeholder="pl. Státusz változás értesítés"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Státusz</label>
+                  <select
+                    value={templateForm.event_key}
+                    onChange={(e) => setTemplateForm({...templateForm, event_key: e.target.value})}
+                    disabled={editingTemplate.id}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    <option value="">Válassz státuszt...</option>
+                    {statuses.map(s => (
+                      <option key={s.key} value={`status_to_${s.key}`}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Tárgy</label>
+                <input
+                  type="text"
+                  value={templateForm.subject}
+                  onChange={(e) => setTemplateForm({...templateForm, subject: e.target.value})}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="Kérés státusza: {{request_number}}"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email Törzs (HTML)</label>
+                <textarea
+                  value={templateForm.body}
+                  onChange={(e) => setTemplateForm({...templateForm, body: e.target.value})}
+                  rows={10}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"
+                  placeholder="<p>Kedves {{requester_name}}!</p>"
+                />
+              </div>
+
+              {/* Variable Inserter */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="text-sm font-medium text-gray-700 mb-2">Változók beszúrása:</div>
+                <div className="flex flex-wrap gap-2">
+                  {['request_number', 'company_name', 'requester_name', 'old_status', 'new_status', 'request_url'].map(v => (
+                    <button
+                      key={v}
+                      onClick={() => insertVariable(v)}
+                      className="px-3 py-1 bg-white border border-gray-300 rounded text-xs hover:bg-gray-50"
+                    >
+                      {`{{${v}}}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex space-x-3">
+                <button
+                  onClick={saveTemplate}
+                  disabled={saving}
+                  className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center space-x-2"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{saving ? 'Mentés...' : 'Sablon Mentése'}</span>
+                </button>
+                <button
+                  onClick={() => setEditingTemplate(null)}
+                  className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                >
+                  Mégse
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Template List
+            <div className="space-y-3">
+              {templates.map(template => (
+                <div key={template.id} className="border border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition-colors">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <h4 className="font-medium text-gray-900">{template.name}</h4>
+                      <p className="text-sm text-gray-500 mt-1">Esemény: {template.event_name}</p>
+                      <p className="text-xs text-gray-400 mt-1">Tárgy: {template.subject}</p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => openTemplateEditor(template)}
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => deleteTemplate(template.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

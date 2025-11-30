@@ -3116,6 +3116,65 @@ def test_smtp(current_user):
     except Exception as e:
         return jsonify({'error': f'Email küldési hiba: {str(e)}'}), 500
 
+# Notification system metadata endpoints
+@app.route('/api/admin/notification-statuses', methods=['GET'])
+@token_required
+@role_required('super_admin')
+def get_notification_statuses(current_user):
+    """Elérhető státuszok listája értesítési rendszerhez"""
+    # LabRequest workflow státuszok
+    statuses = [
+        {'key': 'draft', 'name': 'Vázlat', 'description': 'Kérés vázlat készítés alatt'},
+        {'key': 'pending_approval', 'name': 'Jóváhagyásra vár', 'description': 'Cég admin jóváhagyására vár'},
+        {'key': 'awaiting_shipment', 'name': 'Szállításra vár', 'description': 'Jóváhagyva, mintaszállításra vár'},
+        {'key': 'in_transit', 'name': 'Szállítás alatt', 'description': 'Minta szállítás folyamatban'},
+        {'key': 'arrived_at_provider', 'name': 'Laborban', 'description': 'Minta megérkezett a laborba'},
+        {'key': 'in_progress', 'name': 'Folyamatban', 'description': 'Vizsgálatok folyamatban'},
+        {'key': 'validation_pending', 'name': 'Validálásra vár', 'description': 'Eredmények validálásra várnak'},
+        {'key': 'completed', 'name': 'Befejezett', 'description': 'Kérés befejezve, eredmények validálva'}
+    ]
+    
+    return jsonify({'statuses': statuses})
+
+@app.route('/api/admin/notification-roles', methods=['GET'])
+@token_required
+@role_required('super_admin')
+def get_notification_roles(current_user):
+    """Elérhető szerepkörök listája értesítési rendszerhez"""
+    # Lekérjük az összes egyedi szerepkört a user táblából
+    roles_query = db.session.query(User.role).distinct().all()
+    existing_roles = [r[0] for r in roles_query]
+    
+    # Szerepkör megjelenítési nevek
+    role_display_names = {
+        'company_user': 'Cég dolgozó',
+        'company_admin': 'Cég Admin',
+        'labor_staff': 'Labor',
+        'logistics_staff': 'Logisztika',
+        'super_admin': 'Rendszer Admin'
+    }
+    
+    # Összeállítjuk a választ
+    roles = []
+    for role_key in existing_roles:
+        roles.append({
+            'key': role_key,
+            'name': role_display_names.get(role_key, role_key.replace('_', ' ').title())
+        })
+    
+    # Hozzáadjuk a logisztikai szerepkört ha még nincs a DB-ben
+    if 'logistics_staff' not in existing_roles:
+        roles.append({
+            'key': 'logistics_staff',
+            'name': 'Logisztika'
+        })
+    
+    # Rendezés: company_user, company_admin, labor_staff, logistics_staff, super_admin
+    role_order = ['company_user', 'company_admin', 'labor_staff', 'logistics_staff', 'super_admin']
+    roles.sort(key=lambda x: role_order.index(x['key']) if x['key'] in role_order else 999)
+    
+    return jsonify({'roles': roles})
+
 # v8.0: === END NOTIFICATION MODULE ===
 
 # --- Stats Route ---
