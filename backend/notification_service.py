@@ -209,8 +209,27 @@ class NotificationService:
     @staticmethod
     def _send_email_notification(user, event_data, template_id):
         """Email értesítés küldése"""
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        
         # Late import - circular import elkerülése
         from app import db
+        
+        # SMTP beállítások lekérése
+        cursor = db.session.execute(text("""
+            SELECT smtp_host, smtp_port, smtp_username, smtp_password,
+                   from_email, from_name, use_tls, is_active
+            FROM smtp_settings
+            LIMIT 1
+        """))
+        smtp_settings = cursor.fetchone()
+        
+        if not smtp_settings or smtp_settings[7] != 1:  # is_active check
+            current_app.logger.warning("SMTP not configured or inactive - email not sent")
+            return
+        
+        smtp_host, smtp_port, smtp_username, smtp_password, from_email, from_name, use_tls, is_active = smtp_settings
         
         # Template lekérése
         cursor = db.session.execute(text("""
@@ -227,9 +246,37 @@ class NotificationService:
         rendered_subject = NotificationService._render_template(subject, event_data)
         rendered_body = NotificationService._render_template(body_html, event_data)
         
-        # TODO: Email küldés implementálás (v8.1)
-        # SMTP beállítások lekérése és Flask-Mail küldés
-        current_app.logger.info(f"Email notification queued for {user.email}: {rendered_subject}")
+        # Email címzett ellenőrzés
+        if not user.email:
+            current_app.logger.warning(f"User {user.id} has no email address")
+            return
+        
+        try:
+            # Email összeállítás
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = rendered_subject
+            msg['From'] = f"{from_name} <{from_email}>"
+            msg['To'] = user.email
+            
+            msg.attach(MIMEText(rendered_body, 'html'))
+            
+            # SMTP kapcsolat és küldés
+            if use_tls:
+                server = smtplib.SMTP(smtp_host, smtp_port)
+                server.starttls()
+            else:
+                server = smtplib.SMTP(smtp_host, smtp_port)
+            
+            server.login(smtp_username, smtp_password)
+            server.send_message(msg)
+            server.quit()
+            
+            current_app.logger.info(f"Email sent to {user.email}: {rendered_subject}")
+            
+        except smtplib.SMTPException as e:
+            current_app.logger.error(f"SMTP error sending email to {user.email}: {str(e)}")
+        except Exception as e:
+            current_app.logger.error(f"Error sending email to {user.email}: {str(e)}")
     
     @staticmethod
     def _render_template(template, data):

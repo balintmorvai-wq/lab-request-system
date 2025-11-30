@@ -1,217 +1,251 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { 
-  Bell, Plus, Edit2, Trash2, Save, X, AlertCircle,
-  Mail, Smartphone, Check, Eye, Code
-} from 'lucide-react';
+import { Bell, Settings, CheckCircle, XCircle, Mail } from 'lucide-react';
 
 function NotificationManagement() {
-  const { getAuthHeaders, API_URL } = useAuth();
+  const [activeTab, setActiveTab] = useState('rules'); // 'rules' | 'smtp'
   const [eventTypes, setEventTypes] = useState([]);
-  const [rules, setRules] = useState([]);
   const [templates, setTemplates] = useState([]);
+  const [rules, setRules] = useState([]);
+  const [smtpSettings, setSmtpSettings] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('rules'); // rules | templates
-  
-  // Edit states
-  const [editingRule, setEditingRule] = useState(null);
-  const [editingTemplate, setEditingTemplate] = useState(null);
-  const [isCreatingRule, setIsCreatingRule] = useState(false);
-  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
-  
-  // Migration state
-  const [migrationRunning, setMigrationRunning] = useState(false);
-  const [migrationResult, setMigrationResult] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
 
-  const roles = [
-    { value: 'super_admin', label: 'Super Admin' },
-    { value: 'company_admin', label: 'Céges Admin' },
-    { value: 'company_user', label: 'Céges Felhasználó' },
-    { value: 'labor_staff', label: 'Labor Munkatárs' },
-    { value: 'university_logistics', label: 'Egyetemi Logisztika' },
-    { value: 'company_logistics', label: 'Céges Logisztika' }
-  ];
+  const roleNames = {
+    company_user: 'Cég dolgozó',
+    company_admin: 'Cég Admin',
+    labor_staff: 'Labor',
+    super_admin: 'Admin'
+  };
 
-  // Data fetch
+  const roleOrder = ['company_user', 'company_admin', 'labor_staff', 'super_admin'];
+
   useEffect(() => {
-    fetchData();
+    loadData();
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
+  const loadData = async () => {
     try {
-      const [eventsRes, rulesRes, templatesRes] = await Promise.all([
-        fetch(`${API_URL}/admin/notification-event-types`, { headers: getAuthHeaders() }),
-        fetch(`${API_URL}/admin/notification-rules`, { headers: getAuthHeaders() }),
-        fetch(`${API_URL}/admin/notification-templates`, { headers: getAuthHeaders() })
+      setLoading(true);
+      const token = localStorage.getItem('token');
+
+      const [eventsRes, templatesRes, rulesRes, smtpRes] = await Promise.all([
+        fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-event-types`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-templates`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-rules`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${process.env.REACT_APP_API_URL}/api/admin/smtp-settings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
       ]);
 
-      const eventsData = await eventsRes.json();
+      const events = await eventsRes.json();
+      const temps = await templatesRes.json();
       const rulesData = await rulesRes.json();
-      const templatesData = await templatesRes.json();
+      const smtp = await smtpRes.json();
 
-      setEventTypes(eventsData.event_types || []);
+      setEventTypes(events.event_types || []);
+      setTemplates(temps.templates || []);
       setRules(rulesData.rules || []);
-      setTemplates(templatesData.templates || []);
+      setSmtpSettings(smtp.settings || {
+        smtp_host: 'smtp.gmail.com',
+        smtp_port: 587,
+        smtp_username: '',
+        smtp_password: '',
+        from_email: 'noreply@example.com',
+        from_name: 'Lab Request System',
+        use_tls: 1,
+        is_active: 0
+      });
     } catch (error) {
-      console.error('Fetch error:', error);
-      alert('Hiba történt az adatok betöltése során!');
+      console.error('Load error:', error);
+      setMessage({ text: 'Hiba az adatok betöltésekor!', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  // Rule CRUD
-  const saveRule = async (rule) => {
-    try {
-      const url = rule.id 
-        ? `${API_URL}/admin/notification-rules/${rule.id}`
-        : `${API_URL}/admin/notification-rules`;
-      
-      const method = rule.id ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(rule)
-      });
+  // Get rule for event + role
+  const getRule = (eventId, role) => {
+    return rules.find(r => r.event_type_id === eventId && r.role === role);
+  };
 
-      if (response.ok) {
-        alert(rule.id ? 'Szabály frissítve!' : 'Szabály létrehozva!');
-        fetchData();
-        setEditingRule(null);
-        setIsCreatingRule(false);
-      } else {
-        const data = await response.json();
-        alert(`Hiba: ${data.message}`);
-      }
-    } catch (error) {
-      console.error('Save rule error:', error);
-      alert('Hiba történt a mentés során!');
+  // Toggle in-app notification
+  const toggleInApp = async (eventId, role) => {
+    const rule = getRule(eventId, role);
+    
+    if (rule) {
+      // Update existing rule
+      await updateRule(rule.id, {
+        ...rule,
+        in_app_enabled: !rule.in_app_enabled
+      });
+    } else {
+      // Create new rule
+      await createRule({
+        event_type_id: eventId,
+        role: role,
+        in_app_enabled: true,
+        email_enabled: false,
+        email_template_id: null,
+        priority: 5,
+        is_active: true
+      });
     }
   };
 
-  const deleteRule = async (ruleId) => {
-    if (!window.confirm('Biztosan törlöd ezt a szabályt?')) return;
-
-    try {
-      const response = await fetch(`${API_URL}/admin/notification-rules/${ruleId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
+  // Toggle email notification
+  const toggleEmail = async (eventId, role) => {
+    const rule = getRule(eventId, role);
+    
+    if (rule) {
+      await updateRule(rule.id, {
+        ...rule,
+        email_enabled: !rule.email_enabled
       });
-
-      if (response.ok) {
-        alert('Szabály törölve!');
-        fetchData();
-      } else {
-        alert('Hiba történt a törlés során!');
-      }
-    } catch (error) {
-      console.error('Delete rule error:', error);
-      alert('Hiba történt a törlés során!');
+    } else {
+      // Create new rule with email enabled
+      const defaultTemplate = templates.find(t => t.event_type_id === eventId);
+      
+      await createRule({
+        event_type_id: eventId,
+        role: role,
+        in_app_enabled: false,
+        email_enabled: true,
+        email_template_id: defaultTemplate?.id || null,
+        priority: 5,
+        is_active: true
+      });
     }
   };
 
-  // v8.0 Migration
-  const runMigration = async () => {
-    if (!window.confirm(
-      '⚠️ FIGYELMEZTETÉS!\n\n' +
-      'Ez törli a régi notifications táblát és létrehozza az új v8.0 struktúrát!\n\n' +
-      '• 7 eseménytípus\n' +
-      '• 5 email sablon\n' +
-      '• 14 alapértelmezett szabály\n' +
-      '• Új notifications tábla\n' +
-      '• SMTP beállítások\n\n' +
-      'Folytatod?'
-    )) return;
+  // Change email template
+  const changeTemplate = async (eventId, role, templateId) => {
+    const rule = getRule(eventId, role);
+    
+    if (rule) {
+      await updateRule(rule.id, {
+        ...rule,
+        email_template_id: templateId ? parseInt(templateId) : null
+      });
+    }
+  };
 
-    setMigrationRunning(true);
-    setMigrationResult(null);
-
+  const createRule = async (ruleData) => {
     try {
-      const response = await fetch(`${API_URL}/admin/migrate-v8`, {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-rules`, {
         method: 'POST',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ confirm: true })
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(ruleData)
       });
 
-      const result = await response.json();
-      setMigrationResult(result);
-
-      if (result.success) {
-        alert('✅ v8.0 Migration sikeresen lefutott!\n\n' + result.steps.join('\n'));
-        fetchData(); // Reload data
-      } else {
-        alert('❌ Migration hiba!\n\n' + (result.errors || []).join('\n'));
+      if (response.ok) {
+        await loadData(); // Reload to get updated data
+        showMessage('Szabály létrehozva!', 'success');
       }
     } catch (error) {
-      console.error('Migration error:', error);
-      setMigrationResult({
-        success: false,
-        errors: [error.message]
-      });
-      alert('❌ Migration hiba: ' + error.message);
+      console.error('Create error:', error);
+      showMessage('Hiba a szabály létrehozásakor!', 'error');
     } finally {
-      setMigrationRunning(false);
+      setSaving(false);
     }
   };
 
-  // Template CRUD
-  const saveTemplate = async (template) => {
+  const updateRule = async (ruleId, ruleData) => {
     try {
-      const url = template.id 
-        ? `${API_URL}/admin/notification-templates/${template.id}`
-        : `${API_URL}/admin/notification-templates`;
-      
-      const method = template.id ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify(template)
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/notification-rules/${ruleId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(ruleData)
       });
 
       if (response.ok) {
-        alert(template.id ? 'Sablon frissítve!' : 'Sablon létrehozva!');
-        fetchData();
-        setEditingTemplate(null);
-        setIsCreatingTemplate(false);
-      } else {
-        const data = await response.json();
-        alert(`Hiba: ${data.message}`);
+        await loadData();
+        showMessage('Szabály frissítve!', 'success');
       }
     } catch (error) {
-      console.error('Save template error:', error);
-      alert('Hiba történt a mentés során!');
+      console.error('Update error:', error);
+      showMessage('Hiba a frissítéskor!', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const deleteTemplate = async (templateId) => {
-    if (!window.confirm('Biztosan törlöd ezt a sablont?')) return;
-
+  const saveSMTPSettings = async () => {
     try {
-      const response = await fetch(`${API_URL}/admin/notification-templates/${templateId}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders()
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/smtp-settings`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(smtpSettings)
       });
 
       if (response.ok) {
-        alert('Sablon törölve!');
-        fetchData();
-      } else {
-        const data = await response.json();
-        alert(`Hiba: ${data.message}`);
+        showMessage('SMTP beállítások mentve!', 'success');
       }
     } catch (error) {
-      console.error('Delete template error:', error);
-      alert('Hiba történt a törlés során!');
+      console.error('SMTP save error:', error);
+      showMessage('Hiba az SMTP beállítások mentésekor!', 'error');
+    } finally {
+      setSaving(false);
     }
+  };
+
+  const testEmail = async () => {
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/smtp-test`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ to_email: smtpSettings.smtp_username })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        showMessage('Teszt email elküldve! Ellenőrizd a postafiókot.', 'success');
+      } else {
+        showMessage(`Email hiba: ${data.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Test email error:', error);
+      showMessage('Hiba a teszt email küldésekor!', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const showMessage = (msg, type = 'success') => {
+    setMessage({ text: msg, type });
+    setTimeout(() => setMessage(''), 3000);
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-lg text-gray-600">Betöltés...</div>
+        <div className="text-gray-500">Betöltés...</div>
       </div>
     );
   }
@@ -220,430 +254,276 @@ function NotificationManagement() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Bell className="w-8 h-8 text-indigo-600" />
-            Értesítések Kezelése
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Értesítési szabályok és email sablonok konfigurálása
-          </p>
+        <div className="flex items-center space-x-3">
+          <Bell className="w-8 h-8 text-indigo-600" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Értesítési Rendszer</h1>
+            <p className="text-sm text-gray-500">Értesítések kezelése szerepkörönként</p>
+          </div>
         </div>
-        
-        {/* Migration Button */}
-        <button
-          onClick={runMigration}
-          disabled={migrationRunning}
-          className={`px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all ${
-            migrationRunning
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700 shadow-lg hover:shadow-xl'
-          }`}
-        >
-          {migrationRunning ? (
-            <>
-              <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
-              Migration futtatás...
-            </>
-          ) : (
-            <>
-              🚀 Run v8.0 Migration
-            </>
-          )}
-        </button>
-      </div>
-      
-      {/* Migration Result */}
-      {migrationResult && (
-        <div className={`p-4 rounded-lg border-2 ${
-          migrationResult.success 
-            ? 'bg-green-50 border-green-200' 
-            : 'bg-red-50 border-red-200'
-        }`}>
-          <h3 className="font-bold mb-2 flex items-center gap-2">
-            {migrationResult.success ? '✅ Migration Sikeres!' : '❌ Migration Hiba!'}
-          </h3>
-          {migrationResult.steps && migrationResult.steps.length > 0 && (
-            <div className="space-y-1 text-sm">
-              {migrationResult.steps.map((step, idx) => (
-                <div key={idx} className="text-green-700">{step}</div>
-              ))}
-            </div>
-          )}
-          {migrationResult.errors && migrationResult.errors.length > 0 && (
-            <div className="space-y-1 text-sm">
-              {migrationResult.errors.map((error, idx) => (
-                <div key={idx} className="text-red-700">❌ {error}</div>
-              ))}
-            </div>
-          )}
-          {migrationResult.started_at && (
-            <div className="text-xs text-gray-500 mt-2">
-              Started: {new Date(migrationResult.started_at).toLocaleString()}
-              {migrationResult.completed_at && ` | Completed: ${new Date(migrationResult.completed_at).toLocaleString()}`}
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="-mb-px flex space-x-8">
+        {/* Tabs */}
+        <div className="flex space-x-2">
           <button
             onClick={() => setActiveTab('rules')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
               activeTab === 'rules'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            Értesítési Szabályok ({rules.length})
+            Szabályok
           </button>
           <button
-            onClick={() => setActiveTab('templates')}
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'templates'
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            onClick={() => setActiveTab('smtp')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors flex items-center space-x-2 ${
+              activeTab === 'smtp'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            Email Sablonok ({templates.length})
+            <Settings className="w-4 h-4" />
+            <span>SMTP</span>
           </button>
-        </nav>
+        </div>
       </div>
 
-      {/* Content */}
-      {activeTab === 'rules' ? (
-        <RulesTab
-          rules={rules}
-          eventTypes={eventTypes}
-          templates={templates}
-          roles={roles}
-          editingRule={editingRule}
-          setEditingRule={setEditingRule}
-          isCreatingRule={isCreatingRule}
-          setIsCreatingRule={setIsCreatingRule}
-          saveRule={saveRule}
-          deleteRule={deleteRule}
-        />
-      ) : (
-        <TemplatesTab
-          templates={templates}
-          eventTypes={eventTypes}
-          editingTemplate={editingTemplate}
-          setEditingTemplate={setEditingTemplate}
-          isCreatingTemplate={isCreatingTemplate}
-          setIsCreatingTemplate={setIsCreatingTemplate}
-          saveTemplate={saveTemplate}
-          deleteTemplate={deleteTemplate}
-        />
-      )}
-    </div>
-  );
-}
-
-// Rules Tab Component
-function RulesTab({ rules, eventTypes, templates, roles, editingRule, setEditingRule, isCreatingRule, setIsCreatingRule, saveRule, deleteRule }) {
-  const [formData, setFormData] = useState({});
-
-  useEffect(() => {
-    if (editingRule) {
-      setFormData(editingRule);
-    } else if (isCreatingRule) {
-      setFormData({
-        event_type_id: eventTypes[0]?.id || 1,
-        role: 'company_admin',
-        in_app_enabled: true,
-        email_enabled: false,
-        email_template_id: null,
-        priority: 0,
-        is_active: true
-      });
-    }
-  }, [editingRule, isCreatingRule]);
-
-  const handleSave = () => {
-    saveRule(formData);
-  };
-
-  const handleCancel = () => {
-    setEditingRule(null);
-    setIsCreatingRule(false);
-    setFormData({});
-  };
-
-  // Group rules by event type
-  const rulesByEvent = rules.reduce((acc, rule) => {
-    if (!acc[rule.event_type_id]) {
-      acc[rule.event_type_id] = [];
-    }
-    acc[rule.event_type_id].push(rule);
-    return acc;
-  }, {});
-
-  return (
-    <div className="space-y-6">
-      {/* Create Button */}
-      <button
-        onClick={() => setIsCreatingRule(true)}
-        className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors flex items-center gap-2"
-      >
-        <Plus className="w-5 h-5" />
-        Új Szabály
-      </button>
-
-      {/* Edit/Create Form */}
-      {(editingRule || isCreatingRule) && (
-        <div className="bg-white border-2 border-indigo-200 rounded-lg p-6">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">
-            {editingRule ? 'Szabály Szerkesztése' : 'Új Szabály Létrehozása'}
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Event Type */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Esemény Típus
-              </label>
-              <select
-                value={formData.event_type_id || ''}
-                onChange={(e) => setFormData({ ...formData, event_type_id: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              >
-                {eventTypes.map(et => (
-                  <option key={et.id} value={et.id}>{et.event_name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Role */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Szerepkör
-              </label>
-              <select
-                value={formData.role || ''}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              >
-                {roles.map(r => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* In-App Enabled */}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={formData.in_app_enabled || false}
-                onChange={(e) => setFormData({ ...formData, in_app_enabled: e.target.checked })}
-                className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
-              />
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Smartphone className="w-4 h-4" />
-                In-App Értesítés
-              </label>
-            </div>
-
-            {/* Email Enabled */}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={formData.email_enabled || false}
-                onChange={(e) => setFormData({ ...formData, email_enabled: e.target.checked })}
-                className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
-              />
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-                <Mail className="w-4 h-4" />
-                Email Értesítés
-              </label>
-            </div>
-
-            {/* Email Template */}
-            {formData.email_enabled && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Sablon
-                </label>
-                <select
-                  value={formData.email_template_id || ''}
-                  onChange={(e) => setFormData({ ...formData, email_template_id: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                >
-                  <option value="">Válassz sablont...</option>
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Priority */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Prioritás
-              </label>
-              <input
-                type="number"
-                value={formData.priority || 0}
-                onChange={(e) => setFormData({ ...formData, priority: parseInt(e.target.value) })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-              />
-            </div>
-
-            {/* Active */}
-            <div className="flex items-center gap-3">
-              <input
-                type="checkbox"
-                checked={formData.is_active !== false}
-                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                className="w-5 h-5 text-indigo-600 rounded focus:ring-2 focus:ring-indigo-500"
-              />
-              <label className="text-sm font-medium text-gray-700">
-                Aktív
-              </label>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-3 mt-6">
-            <button
-              onClick={handleSave}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
-            >
-              <Save className="w-4 h-4" />
-              Mentés
-            </button>
-            <button
-              onClick={handleCancel}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg font-semibold hover:bg-gray-700 transition-colors flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Mégse
-            </button>
-          </div>
+      {/* Message */}
+      {message && (
+        <div className={`p-4 rounded-lg flex items-center space-x-2 ${
+          message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+        }`}>
+          {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+          <span>{message.text}</span>
         </div>
       )}
 
-      {/* Rules List */}
-      <div className="space-y-6">
-        {eventTypes.map(eventType => {
-          const eventRules = rulesByEvent[eventType.id] || [];
-          
-          return (
-            <div key={eventType.id} className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 bg-gradient-to-r from-indigo-600 to-blue-600 text-white">
-                <h3 className="text-lg font-bold">{eventType.event_name}</h3>
-                <p className="text-sm text-indigo-100">{eventType.description}</p>
-              </div>
+      {/* Rules Tab */}
+      {activeTab === 'rules' && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              {/* Header */}
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">
+                    Esemény
+                  </th>
+                  {roleOrder.map(role => (
+                    <th key={role} className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {roleNames[role]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
 
-              {eventRules.length === 0 ? (
-                <div className="px-6 py-4 text-center text-gray-500">
-                  Nincs szabály ehhez az eseménytípushoz
-                </div>
-              ) : (
-                <div className="divide-y divide-gray-200">
-                  {eventRules.map(rule => (
-                    <div key={rule.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <span className="px-3 py-1 bg-indigo-100 text-indigo-700 text-sm font-semibold rounded">
-                              {roles.find(r => r.value === rule.role)?.label}
-                            </span>
-                            {rule.in_app_enabled && (
-                              <span className="px-2 py-1 bg-green-100 text-green-700 text-xs font-medium rounded flex items-center gap-1">
-                                <Smartphone className="w-3 h-3" />
-                                In-App
-                              </span>
-                            )}
-                            {rule.email_enabled && (
-                              <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded flex items-center gap-1">
-                                <Mail className="w-3 h-3" />
-                                Email
-                              </span>
-                            )}
-                            {!rule.is_active && (
-                              <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">
-                                Inaktív
-                              </span>
+              {/* Body */}
+              <tbody className="bg-white divide-y divide-gray-200">
+                {eventTypes.map(event => (
+                  <tr key={event.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">{event.event_name}</div>
+                      <div className="text-xs text-gray-500">{event.description}</div>
+                    </td>
+
+                    {roleOrder.map(role => {
+                      const rule = getRule(event.id, role);
+                      const eventTemplates = templates.filter(t => t.event_type_id === event.id);
+
+                      return (
+                        <td key={role} className="px-6 py-4 text-center">
+                          <div className="space-y-2">
+                            {/* In-App Checkbox */}
+                            <label className="flex items-center justify-center space-x-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={rule?.in_app_enabled || false}
+                                onChange={() => toggleInApp(event.id, role)}
+                                disabled={saving}
+                                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                              />
+                              <span className="text-sm text-gray-700">App</span>
+                            </label>
+
+                            {/* Email Checkbox + Template */}
+                            {eventTemplates.length > 0 && (
+                              <div className="space-y-1">
+                                <label className="flex items-center justify-center space-x-2 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={rule?.email_enabled || false}
+                                    onChange={() => toggleEmail(event.id, role)}
+                                    disabled={saving}
+                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                  />
+                                  <Mail className="w-4 h-4 text-gray-500" />
+                                </label>
+
+                                {rule?.email_enabled && (
+                                  <select
+                                    value={rule.email_template_id || ''}
+                                    onChange={(e) => changeTemplate(event.id, role, e.target.value)}
+                                    disabled={saving}
+                                    className="text-xs border-gray-300 rounded px-2 py-1 w-full"
+                                  >
+                                    <option value="">Sablon...</option>
+                                    {eventTemplates.map(t => (
+                                      <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
                             )}
                           </div>
-                          {rule.email_template_name && (
-                            <p className="text-sm text-gray-600">
-                              Email sablon: <span className="font-medium">{rule.email_template_name}</span>
-                            </p>
-                          )}
-                        </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setEditingRule(rule)}
-                            className="p-2 text-blue-600 hover:bg-blue-100 rounded transition-colors"
-                            title="Szerkesztés"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => deleteRule(rule.id)}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors"
-                            title="Törlés"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+          {/* Legend */}
+          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
+            <div className="flex items-center space-x-6 text-sm text-gray-600">
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 border-2 border-indigo-600 rounded flex items-center justify-center">
+                  <div className="w-2 h-2 bg-indigo-600 rounded-sm"></div>
                 </div>
-              )}
+                <span>In-app értesítés</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Mail className="w-4 h-4 text-indigo-600" />
+                <span>Email értesítés</span>
+              </div>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// Templates Tab Component (simplified - full implementation would be similar to RulesTab)
-function TemplatesTab({ templates, eventTypes, editingTemplate, setEditingTemplate, isCreatingTemplate, setIsCreatingTemplate, saveTemplate, deleteTemplate }) {
-  return (
-    <div className="space-y-6">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-center gap-2 text-blue-800">
-          <AlertCircle className="w-5 h-5" />
-          <p className="text-sm font-medium">
-            Email sablonok létrehozása és szerkesztése hamarosan elérhető lesz. Jelenleg az alapértelmezett sablonok használhatók.
-          </p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Templates List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {templates.map(template => (
-          <div key={template.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:border-indigo-300 transition-colors">
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="text-lg font-bold text-gray-900">{template.name}</h3>
-              <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs font-medium rounded">
-                {eventTypes.find(et => et.id === template.event_type_id)?.event_name}
-              </span>
+      {/* SMTP Tab */}
+      {activeTab === 'smtp' && smtpSettings && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-6">SMTP Email Beállítások</h2>
+          
+          <div className="space-y-4 max-w-2xl">
+            {/* Active Toggle */}
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={smtpSettings.is_active === 1}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, is_active: e.target.checked ? 1 : 0 })}
+                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              />
+              <label className="text-sm font-medium text-gray-700">Email értesítések aktívak</label>
             </div>
-            <p className="text-sm text-gray-600 mb-2">
-              <strong>Tárgy:</strong> {template.subject}
-            </p>
-            <div className="flex items-center gap-2 mt-4">
+
+            {/* SMTP Host */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Szerver</label>
+              <input
+                type="text"
+                value={smtpSettings.smtp_host || ''}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, smtp_host: e.target.value })}
+                placeholder="smtp.gmail.com"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Port */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+              <input
+                type="number"
+                value={smtpSettings.smtp_port || 587}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, smtp_port: parseInt(e.target.value) })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Username */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Felhasználónév (Email cím)</label>
+              <input
+                type="email"
+                value={smtpSettings.smtp_username || ''}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, smtp_username: e.target.value })}
+                placeholder="noreply@example.com"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Password */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Jelszó (App Password)</label>
+              <input
+                type="password"
+                value={smtpSettings.smtp_password || ''}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, smtp_password: e.target.value })}
+                placeholder="••••••••••••••••"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-xs text-gray-500">Gmail esetén App Password szükséges (2FA engedélyezve)</p>
+            </div>
+
+            {/* From Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Feladó Email</label>
+              <input
+                type="email"
+                value={smtpSettings.from_email || ''}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, from_email: e.target.value })}
+                placeholder="noreply@example.com"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* From Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Feladó Név</label>
+              <input
+                type="text"
+                value={smtpSettings.from_name || ''}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, from_name: e.target.value })}
+                placeholder="Lab Request System"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* TLS */}
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                checked={smtpSettings.use_tls === 1}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, use_tls: e.target.checked ? 1 : 0 })}
+                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              />
+              <label className="text-sm font-medium text-gray-700">TLS használata (ajánlott)</label>
+            </div>
+
+            {/* Buttons */}
+            <div className="flex space-x-3 pt-4">
               <button
-                onClick={() => alert('Előnézet hamarosan!')}
-                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors flex items-center gap-1"
+                onClick={saveSMTPSettings}
+                disabled={saving}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                <Eye className="w-3 h-3" />
-                Előnézet
+                {saving ? 'Mentés...' : 'Beállítások Mentése'}
+              </button>
+              
+              <button
+                onClick={testEmail}
+                disabled={saving || !smtpSettings.smtp_username}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+              >
+                <Mail className="w-4 h-4" />
+                <span>{saving ? 'Küldés...' : 'Teszt Email'}</span>
               </button>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

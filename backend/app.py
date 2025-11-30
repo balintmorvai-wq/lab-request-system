@@ -2973,6 +2973,149 @@ def delete_notification_template(current_user, template_id):
     
     return jsonify({'message': 'Email sablon törölve!'})
 
+# SMTP Settings endpoints
+@app.route('/api/admin/smtp-settings', methods=['GET'])
+@token_required
+@role_required('super_admin')
+def get_smtp_settings(current_user):
+    """SMTP beállítások lekérése"""
+    settings = SMTPSettings.query.first()
+    
+    if not settings:
+        # Return default settings
+        return jsonify({
+            'settings': {
+                'smtp_host': 'smtp.gmail.com',
+                'smtp_port': 587,
+                'smtp_username': '',
+                'smtp_password': '',
+                'from_email': 'noreply@example.com',
+                'from_name': 'Lab Request System',
+                'use_tls': 1,
+                'is_active': 0
+            }
+        })
+    
+    return jsonify({
+        'settings': {
+            'id': settings.id,
+            'smtp_host': settings.smtp_host,
+            'smtp_port': settings.smtp_port,
+            'smtp_username': settings.smtp_username,
+            'smtp_password': settings.smtp_password,
+            'from_email': settings.from_email,
+            'from_name': settings.from_name,
+            'use_tls': settings.use_tls,
+            'is_active': settings.is_active
+        }
+    })
+
+@app.route('/api/admin/smtp-settings', methods=['PUT'])
+@token_required
+@role_required('super_admin')
+def update_smtp_settings(current_user):
+    """SMTP beállítások frissítése/létrehozása"""
+    data = request.get_json()
+    
+    settings = SMTPSettings.query.first()
+    
+    if not settings:
+        # Create new settings
+        settings = SMTPSettings(
+            smtp_host=data.get('smtp_host'),
+            smtp_port=data.get('smtp_port', 587),
+            smtp_username=data.get('smtp_username'),
+            smtp_password=data.get('smtp_password'),
+            from_email=data.get('from_email'),
+            from_name=data.get('from_name', 'Lab Request System'),
+            use_tls=data.get('use_tls', 1),
+            is_active=data.get('is_active', 0)
+        )
+        db.session.add(settings)
+    else:
+        # Update existing settings
+        settings.smtp_host = data.get('smtp_host', settings.smtp_host)
+        settings.smtp_port = data.get('smtp_port', settings.smtp_port)
+        settings.smtp_username = data.get('smtp_username', settings.smtp_username)
+        
+        # Only update password if provided (not empty)
+        if data.get('smtp_password'):
+            settings.smtp_password = data.get('smtp_password')
+            
+        settings.from_email = data.get('from_email', settings.from_email)
+        settings.from_name = data.get('from_name', settings.from_name)
+        settings.use_tls = data.get('use_tls', settings.use_tls)
+        settings.is_active = data.get('is_active', settings.is_active)
+        settings.updated_at = datetime.datetime.utcnow()
+    
+    db.session.commit()
+    
+    return jsonify({'message': 'SMTP beállítások mentve!'})
+
+@app.route('/api/admin/smtp-test', methods=['POST'])
+@token_required
+@role_required('super_admin')
+def test_smtp(current_user):
+    """SMTP kapcsolat tesztelése teszt email küldéssel"""
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    data = request.get_json()
+    to_email = data.get('to_email')
+    
+    if not to_email:
+        return jsonify({'error': 'Email cím megadása kötelező!'}), 400
+    
+    settings = SMTPSettings.query.first()
+    if not settings:
+        return jsonify({'error': 'SMTP beállítások nincsenek konfigurálva!'}), 400
+    
+    try:
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = 'SMTP Teszt Email - Lab Request System'
+        msg['From'] = f"{settings.from_name} <{settings.from_email}>"
+        msg['To'] = to_email
+        
+        # Email body
+        html = f"""
+        <html>
+          <body style="font-family: Arial, sans-serif; padding: 20px;">
+            <h2 style="color: #4F46E5;">SMTP Teszt Email Sikeres! ✅</h2>
+            <p>Ez egy teszt email a Lab Request System értesítési rendszeréből.</p>
+            <p><strong>SMTP Szerver:</strong> {settings.smtp_host}:{settings.smtp_port}</p>
+            <p><strong>Küldés ideje:</strong> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <hr style="border: 1px solid #E5E7EB; margin: 20px 0;">
+            <p style="color: #6B7280; font-size: 12px;">
+              Ha ezt az emailt megkaptad, az SMTP beállításaid helyesek! 🎉
+            </p>
+          </body>
+        </html>
+        """
+        
+        msg.attach(MIMEText(html, 'html'))
+        
+        # Send email
+        if settings.use_tls:
+            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
+            server.starttls()
+        else:
+            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
+        
+        server.login(settings.smtp_username, settings.smtp_password)
+        server.send_message(msg)
+        server.quit()
+        
+        return jsonify({'message': 'Teszt email sikeresen elküldve!'}), 200
+        
+    except smtplib.SMTPAuthenticationError:
+        return jsonify({'error': 'SMTP authentikációs hiba! Ellenőrizd a felhasználónevet és jelszót.'}), 400
+    except smtplib.SMTPException as e:
+        return jsonify({'error': f'SMTP hiba: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'Email küldési hiba: {str(e)}'}), 500
+
 # v8.0: === END NOTIFICATION MODULE ===
 
 # --- Stats Route ---
