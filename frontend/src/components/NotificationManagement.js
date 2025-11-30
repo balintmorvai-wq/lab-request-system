@@ -20,6 +20,7 @@ function NotificationManagement() {
     subject: '',
     body: ''
   });
+  const [migrationStatus, setMigrationStatus] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -393,6 +394,55 @@ function NotificationManagement() {
     setTimeout(() => setMessage(''), 3000);
   };
 
+  const runMigration = async () => {
+    if (!window.confirm('Biztosan futtatni szeretnéd a v8.1 migration-t? Ez hozzáadja a státusz-alapú eseményeket.')) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setMigrationStatus({ running: true });
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/run-migration/v8.1`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        setMigrationStatus({
+          success: true,
+          added: data.added,
+          existing: data.existing,
+          errors: data.errors
+        });
+        showMessage(`Migration sikeres! ${data.added} esemény hozzáadva, ${data.existing} már létezett.`, 'success');
+        // Reload data to show new statuses
+        await loadData();
+      } else {
+        setMigrationStatus({
+          success: false,
+          error: data.error || 'Ismeretlen hiba'
+        });
+        showMessage(`Migration hiba: ${data.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Migration error:', error);
+      setMigrationStatus({
+        success: false,
+        error: error.message
+      });
+      showMessage('Migration hiba!', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const insertVariable = (varName) => {
     setTemplateForm({
       ...templateForm,
@@ -469,7 +519,74 @@ function NotificationManagement() {
 
       {/* Rules Tab */}
       {activeTab === 'rules' && (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="space-y-4">
+          {/* Migration Info Panel */}
+          {statuses.length < 8 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-yellow-800 mb-1">
+                    ⚠️ Státusz események hiányoznak
+                  </h3>
+                  <p className="text-sm text-yellow-700 mb-2">
+                    A státusz-alapú értesítési rendszerhez szükséges 8 eseménytípus még nincs létrehozva.
+                    Futtasd le a v8.1 migration-t a hiányzó események hozzáadásához.
+                  </p>
+                  <p className="text-xs text-yellow-600">
+                    Várható: 8 státusz esemény (draft, pending_approval, awaiting_shipment, in_transit, arrived_at_provider, in_progress, validation_pending, completed)
+                  </p>
+                </div>
+                <button
+                  onClick={runMigration}
+                  disabled={saving}
+                  className="ml-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 flex items-center space-x-2 whitespace-nowrap"
+                >
+                  <Settings className="w-4 h-4" />
+                  <span>{saving ? 'Futtatás...' : 'Migration Futtatás'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Migration Status */}
+          {migrationStatus && migrationStatus.success !== undefined && (
+            <div className={`border rounded-lg p-4 ${
+              migrationStatus.success 
+                ? 'bg-green-50 border-green-200' 
+                : 'bg-red-50 border-red-200'
+            }`}>
+              <div className="flex items-start space-x-3">
+                {migrationStatus.success ? (
+                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <XCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                )}
+                <div className="flex-1">
+                  <h4 className={`text-sm font-semibold mb-1 ${
+                    migrationStatus.success ? 'text-green-800' : 'text-red-800'
+                  }`}>
+                    {migrationStatus.success ? 'Migration sikeres! ✅' : 'Migration hiba! ❌'}
+                  </h4>
+                  {migrationStatus.success ? (
+                    <div className="text-sm text-green-700">
+                      <p>✅ Hozzáadva: <strong>{migrationStatus.added}</strong> esemény</p>
+                      <p>⏭️ Már létezett: <strong>{migrationStatus.existing}</strong> esemény</p>
+                      {migrationStatus.errors && migrationStatus.errors.length > 0 && (
+                        <p className="mt-2 text-red-600">
+                          ⚠️ Hibák: {migrationStatus.errors.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-red-700">{migrationStatus.error}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rules Table */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               {/* Header */}

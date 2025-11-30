@@ -3175,6 +3175,102 @@ def get_notification_roles(current_user):
     
     return jsonify({'roles': roles})
 
+@app.route('/api/admin/run-migration/v8.1', methods=['POST'])
+@token_required
+@role_required('super_admin')
+def run_migration_v8_1(current_user):
+    """
+    v8.1 Migration futtatása: Státusz-alapú event type-ok hozzáadása
+    
+    Böngészőből hívható endpoint a migration futtatásához.
+    """
+    try:
+        # Státusz-alapú event type-ok
+        status_events = [
+            ('status_to_draft', 'Vázlat státusz', 
+             'Kérés vázlat állapotba került', 
+             '["request_number", "company_name", "requester_name", "new_status"]'),
+            
+            ('status_to_pending_approval', 'Jóváhagyásra vár', 
+             'Kérés jóváhagyásra vár', 
+             '["request_number", "company_name", "requester_name", "new_status"]'),
+            
+            ('status_to_awaiting_shipment', 'Szállításra vár', 
+             'Kérés jóváhagyva, mintaszállításra vár', 
+             '["request_number", "company_name", "requester_name", "new_status", "approved_by"]'),
+            
+            ('status_to_in_transit', 'Szállítás alatt', 
+             'Minta szállítás megkezdődött', 
+             '["request_number", "company_name", "requester_name", "new_status", "logistics_staff"]'),
+            
+            ('status_to_arrived_at_provider', 'Minta laborban', 
+             'Minta megérkezett a laborba', 
+             '["request_number", "company_name", "requester_name", "new_status", "received_by"]'),
+            
+            ('status_to_in_progress', 'Vizsgálat folyamatban', 
+             'Laboratóriumi vizsgálatok megkezdődtek', 
+             '["request_number", "company_name", "requester_name", "new_status", "lab_staff"]'),
+            
+            ('status_to_validation_pending', 'Validálásra vár', 
+             'Eredmények validálásra várnak', 
+             '["request_number", "company_name", "requester_name", "new_status", "lab_staff"]'),
+            
+            ('status_to_completed', 'Befejezett', 
+             'Kérés befejezve, eredmények validálva', 
+             '["request_number", "company_name", "requester_name", "new_status", "validated_by"]')
+        ]
+        
+        added_count = 0
+        existing_count = 0
+        errors = []
+        
+        for event in status_events:
+            event_key, event_name, description, variables = event
+            
+            # Ellenőrzés: létezik-e már
+            existing = db.session.execute(
+                text("SELECT COUNT(*) FROM notification_event_types WHERE event_key = :key"),
+                {"key": event_key}
+            ).fetchone()
+            
+            if existing and existing[0] > 0:
+                existing_count += 1
+            else:
+                try:
+                    db.session.execute(
+                        text("""
+                            INSERT INTO notification_event_types 
+                            (event_key, event_name, description, available_variables)
+                            VALUES (:key, :name, :desc, :vars)
+                        """),
+                        {
+                            "key": event_key,
+                            "name": event_name,
+                            "desc": description,
+                            "vars": variables
+                        }
+                    )
+                    added_count += 1
+                except Exception as e:
+                    errors.append(f"{event_name}: {str(e)}")
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'v8.1 Migration sikeresen befejezve!',
+            'added': added_count,
+            'existing': existing_count,
+            'errors': errors
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Migration hiba: {str(e)}'
+        }), 500
+
 # v8.0: === END NOTIFICATION MODULE ===
 
 # --- Stats Route ---
