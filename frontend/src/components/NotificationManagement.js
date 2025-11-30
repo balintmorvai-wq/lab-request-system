@@ -453,6 +453,48 @@ function NotificationManagement() {
     }
   };
 
+  const cleanupOldRules = async () => {
+    const confirmMessage = `⚠️ FIGYELEM!\n\nEz a művelet törölni fogja az összes régi notification rule-t (ami nem státusz-alapú)!\n\nJelenleg ${rules.length} rule van a rendszerben.\nCsak a státusz-alapú (status_to_*) rule-ok maradnak meg.\n\nEz a művelet NEM VISSZAVONHATÓ!\n\nBiztosan folytatod?`;
+    
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/cleanup-old-rules`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        showMessage(`Cleanup sikeres! ${data.deleted} régi rule törölve. ${data.remaining} rule maradt.`, 'success');
+        
+        // Részletes info
+        if (data.deleted_event_types && data.deleted_event_types.length > 0) {
+          console.log('Törölt event type-ok:', data.deleted_event_types);
+        }
+        
+        // Reload data
+        await loadData();
+      } else {
+        showMessage(`Cleanup hiba: ${data.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Cleanup error:', error);
+      showMessage('Cleanup hiba!', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const insertVariable = (varName) => {
     setTemplateForm({
       ...templateForm,
@@ -534,14 +576,24 @@ function NotificationManagement() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-blue-800">🔍 Debug Info</h3>
-              <button
-                onClick={runMigration}
-                disabled={saving}
-                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-1"
-              >
-                <Settings className="w-3 h-3" />
-                <span>{saving ? 'Futtatás...' : 'Force Migration'}</span>
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={runMigration}
+                  disabled={saving}
+                  className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-1"
+                >
+                  <Settings className="w-3 h-3" />
+                  <span>{saving ? 'Futtatás...' : 'Force Migration'}</span>
+                </button>
+                <button
+                  onClick={cleanupOldRules}
+                  disabled={saving}
+                  className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 disabled:opacity-50 flex items-center space-x-1"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>{saving ? 'Törlés...' : 'Régi Rule-ok Törlése'}</span>
+                </button>
+              </div>
             </div>
             <div className="text-xs text-blue-700 space-y-1">
               <p><strong>Statuses betöltve:</strong> {statuses.length} db</p>

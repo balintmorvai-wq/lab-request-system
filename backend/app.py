@@ -3298,6 +3298,98 @@ def run_migration_v8_1(current_user):
             'error': f'Migration hiba: {str(e)}'
         }), 500
 
+@app.route('/api/admin/cleanup-old-rules', methods=['POST'])
+@token_required
+@role_required('super_admin')
+def cleanup_old_notification_rules(current_user):
+    """
+    Régi notification rule-ok törlése (nem státusz-alapúak)
+    
+    Törli az összes olyan rule-t, ami NINCS status_to_* event type-hoz rendelve.
+    Megtartja csak az új státusz-alapú rule-okat.
+    """
+    try:
+        # Ellenőrzés: hány rule van összesen
+        total_rules = db.session.execute(
+            text("SELECT COUNT(*) FROM notification_rules")
+        ).fetchone()[0]
+        
+        # Státusz-alapú rule-ok száma
+        status_rules = db.session.execute(
+            text("""
+                SELECT COUNT(*) 
+                FROM notification_rules nr
+                JOIN notification_event_types net ON nr.event_type_id = net.id
+                WHERE net.event_key LIKE 'status_to_%'
+            """)
+        ).fetchone()[0]
+        
+        # Régi rule-ok száma
+        old_rules = total_rules - status_rules
+        
+        if old_rules == 0:
+            return jsonify({
+                'success': True,
+                'message': 'Nincs mit törölni! Minden rule státusz-alapú.',
+                'deleted': 0,
+                'remaining': status_rules
+            }), 200
+        
+        # Régi event type-ok listája (info célra)
+        old_event_types_cursor = db.session.execute(
+            text("""
+                SELECT DISTINCT net.event_key, net.event_name, COUNT(nr.id) as rule_count
+                FROM notification_event_types net
+                LEFT JOIN notification_rules nr ON net.id = nr.event_type_id
+                WHERE net.event_key NOT LIKE 'status_to_%'
+                GROUP BY net.id, net.event_key, net.event_name
+                HAVING rule_count > 0
+                ORDER BY rule_count DESC
+            """)
+        )
+        
+        old_event_types = []
+        for row in old_event_types_cursor:
+            old_event_types.append({
+                'event_key': row[0],
+                'event_name': row[1],
+                'rule_count': row[2]
+            })
+        
+        # TÖRLÉS - régi rule-ok
+        db.session.execute(
+            text("""
+                DELETE FROM notification_rules
+                WHERE event_type_id IN (
+                    SELECT id 
+                    FROM notification_event_types 
+                    WHERE event_key NOT LIKE 'status_to_%'
+                )
+            """)
+        )
+        
+        db.session.commit()
+        
+        # Végső állapot
+        final_rules = db.session.execute(
+            text("SELECT COUNT(*) FROM notification_rules")
+        ).fetchone()[0]
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cleanup sikeres! {old_rules} régi rule törölve.',
+            'deleted': old_rules,
+            'remaining': final_rules,
+            'deleted_event_types': old_event_types
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Cleanup hiba: {str(e)}'
+        }), 500
+
 # v8.0: === END NOTIFICATION MODULE ===
 
 # --- Stats Route ---
