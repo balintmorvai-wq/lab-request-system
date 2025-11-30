@@ -23,6 +23,7 @@ import qrcode  # v7.0.31: QR kód generálás
 # v8.0: Notification Service
 from notification_service import NotificationService
 
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 

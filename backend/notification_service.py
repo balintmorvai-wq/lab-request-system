@@ -23,6 +23,7 @@ import json
 import re
 from datetime import datetime
 from flask import current_app
+from sqlalchemy import text
 
 # LATE IMPORT - db, User, LabRequest csak függvényeken belül!
 # Ezzel elkerüljük a circular import-ot (app.py imports notification_service)
@@ -52,8 +53,8 @@ class NotificationService:
         
         # Event type lekérése
         cursor = db.session.execute(
-            "SELECT id, event_name FROM notification_event_types WHERE event_key = ?",
-            (event_key,)
+            text("SELECT id, event_name FROM notification_event_types WHERE event_key = :key"),
+            {"key": event_key}
         )
         event_type = cursor.fetchone()
         
@@ -151,13 +152,13 @@ class NotificationService:
         # Late import - circular import elkerülése
         from app import db
         
-        cursor = db.session.execute("""
+        cursor = db.session.execute(text("""
             SELECT role, event_filter, in_app_enabled, email_enabled, 
                    email_template_id, priority
             FROM notification_rules
-            WHERE event_type_id = ? AND is_active = 1
+            WHERE event_type_id = :event_id AND is_active = 1
             ORDER BY priority DESC
-        """, (event_type_id,))
+        """), {"event_id": event_type_id})
         
         rules = []
         for row in cursor:
@@ -199,11 +200,11 @@ class NotificationService:
         # Late import - circular import elkerülése
         from app import db
         
-        db.session.execute("""
+        db.session.execute(text("""
             INSERT INTO notifications 
             (user_id, event_type_id, event_data, message, link_url, request_id)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (user_id, event_type_id, json.dumps(event_data), message, link_url, request_id))
+            VALUES (:p0, :p1, :p2, :p3, :p4, :p5)
+        """), {"p0": user_id, "p1": event_type_id, "p2": json.dumps(event_data), "p3": message, "p4": link_url, "p5": request_id})
     
     @staticmethod
     def _send_email_notification(user, event_data, template_id):
@@ -212,9 +213,9 @@ class NotificationService:
         from app import db
         
         # Template lekérése
-        cursor = db.session.execute("""
-            SELECT subject, body_html FROM notification_templates WHERE id = ?
-        """, (template_id,))
+        cursor = db.session.execute(text("""
+            SELECT subject, body_html FROM notification_templates WHERE id = :p0
+        """), {"p0": template_id})
         template = cursor.fetchone()
         
         if not template:
@@ -249,11 +250,11 @@ class NotificationService:
         # Late import - circular import elkerülése
         from app import db
         
-        db.session.execute("""
+        db.session.execute(text("""
             UPDATE notifications 
             SET is_read = 1, read_at = CURRENT_TIMESTAMP
-            WHERE id = ? AND user_id = ?
-        """, (notification_id, user_id))
+            WHERE id = :p0 AND user_id = :p1
+        """), {"p0": notification_id, "p1": user_id})
         db.session.commit()
     
     @staticmethod
@@ -262,11 +263,11 @@ class NotificationService:
         # Late import - circular import elkerülése
         from app import db
         
-        db.session.execute("""
+        db.session.execute(text("""
             UPDATE notifications 
             SET is_read = 1, read_at = CURRENT_TIMESTAMP
-            WHERE user_id = ? AND is_read = 0
-        """, (user_id,))
+            WHERE user_id = :p0 AND is_read = 0
+        """), {"p0": user_id})
         db.session.commit()
     
     @staticmethod
@@ -275,10 +276,10 @@ class NotificationService:
         # Late import - circular import elkerülése
         from app import db
         
-        db.session.execute("""
+        db.session.execute(text("""
             DELETE FROM notifications 
-            WHERE id = ? AND user_id = ?
-        """, (notification_id, user_id))
+            WHERE id = :p0 AND user_id = :p1
+        """), {"p0": notification_id, "p1": user_id})
         db.session.commit()
     
     @staticmethod
@@ -303,7 +304,7 @@ class NotificationService:
         query += " ORDER BY n.created_at DESC LIMIT ?"
         params.append(limit)
         
-        cursor = db.session.execute(query, params)
+        cursor = db.session.execute(text(query), params)
         
         notifications = []
         for row in cursor:
@@ -326,8 +327,8 @@ class NotificationService:
         # Late import - circular import elkerülése
         from app import db
         
-        cursor = db.session.execute("""
+        cursor = db.session.execute(text("""
             SELECT COUNT(*) FROM notifications 
-            WHERE user_id = ? AND is_read = 0
-        """, (user_id,))
+            WHERE user_id = :p0 AND is_read = 0
+        """), {"p0": user_id})
         return cursor.fetchone()[0]
