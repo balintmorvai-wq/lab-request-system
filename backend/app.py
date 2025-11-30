@@ -3987,3 +3987,343 @@ else:
         ensure_v67_data()
         
     print("✅ Production initialization complete!\n")
+
+# ============================================
+# SIMPLE v8.0 MIGRATION - GET ENDPOINT
+# ============================================
+@app.route('/migrate-v8-run', methods=['GET'])
+def migrate_v8_simple():
+    """
+    Egyszerű migration endpoint - böngészőből hívható
+    URL: /migrate-v8-run?secret=LAB2024SECRET
+    """
+    # Secret check (biztonság)
+    secret = request.args.get('secret', '')
+    if secret != 'LAB2024SECRET':
+        return """
+        <html>
+        <head><title>Access Denied</title></head>
+        <body style="font-family: Arial; text-align: center; padding: 100px;">
+            <h1 style="color: #ef4444;">❌ Invalid Secret</h1>
+            <p>URL formátum: /migrate-v8-run?secret=LAB2024SECRET</p>
+        </body>
+        </html>
+        """, 403
+    
+    try:
+        results = []
+        
+        # 1. Drop old table
+        db.session.execute(text("DROP TABLE IF EXISTS notifications CASCADE"))
+        db.session.commit()
+        results.append('✅ Old notifications table dropped')
+        
+        # 2. Create notification_event_types
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS notification_event_types (
+                id SERIAL PRIMARY KEY,
+                event_key VARCHAR(50) UNIQUE NOT NULL,
+                event_name VARCHAR(100) NOT NULL,
+                description TEXT,
+                available_variables TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        
+        events = [
+            ('status_change', 'Státuszváltozás', 'Kérés státusza megváltozott', '["request_number"]'),
+            ('new_request', 'Új kérés létrehozva', 'Új laborkérés', '["request_number"]'),
+            ('request_approved', 'Kérés jóváhagyva', 'Jóváhagyva', '["request_number"]'),
+            ('request_rejected', 'Kérés elutasítva', 'Elutasítva', '["request_number"]'),
+            ('results_uploaded', 'Eredmények feltöltve', 'Eredmények elérhetők', '["request_number"]'),
+            ('deadline_approaching', 'Határidő közeledik', 'Lejárat közel', '["request_number"]'),
+            ('comment_added', 'Megjegyzés hozzáadva', 'Új megjegyzés', '["request_number"]')
+        ]
+        
+        for e in events:
+            db.session.execute(text("""
+                INSERT INTO notification_event_types (event_key, event_name, description, available_variables)
+                VALUES (:k, :n, :d, :v) ON CONFLICT (event_key) DO NOTHING
+            """), {'k': e[0], 'n': e[1], 'd': e[2], 'v': e[3]})
+        
+        db.session.commit()
+        results.append(f'✅ Event types created ({len(events)} types)')
+        
+        # 3. Create notification_templates
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS notification_templates (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                event_type_id INTEGER NOT NULL,
+                subject VARCHAR(200) NOT NULL,
+                body_html TEXT NOT NULL,
+                variables_used TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        
+        templates = [
+            ('Státuszváltozás', 1, 'Státusz: {{request_number}}', '<p>Státusz változott</p>', '[]'),
+            ('Új kérés', 2, 'Új: {{request_number}}', '<p>Új kérés</p>', '[]'),
+            ('Jóváhagyva', 3, 'OK: {{request_number}}', '<p>Jóváhagyva</p>', '[]'),
+            ('Elutasítva', 4, 'NO: {{request_number}}', '<p>Elutasítva</p>', '[]'),
+            ('Eredmények', 5, 'Kész: {{request_number}}', '<p>Eredmények</p>', '[]')
+        ]
+        
+        for t in templates:
+            db.session.execute(text("""
+                INSERT INTO notification_templates (name, event_type_id, subject, body_html, variables_used)
+                VALUES (:n, :e, :s, :b, :v)
+            """), {'n': t[0], 'e': t[1], 's': t[2], 'b': t[3], 'v': t[4]})
+        
+        db.session.commit()
+        results.append(f'✅ Templates created ({len(templates)} templates)')
+        
+        # 4. Create notification_rules
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS notification_rules (
+                id SERIAL PRIMARY KEY,
+                event_type_id INTEGER NOT NULL,
+                role VARCHAR(50) NOT NULL,
+                event_filter TEXT,
+                in_app_enabled INTEGER DEFAULT 1,
+                email_enabled INTEGER DEFAULT 0,
+                email_template_id INTEGER,
+                priority INTEGER DEFAULT 5,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        
+        rules = [
+            (1, 'company_user', None, 1, 0, None, 10, 1),
+            (1, 'company_admin', None, 1, 1, 1, 10, 1),
+            (1, 'labor_staff', None, 1, 0, None, 5, 1),
+            (1, 'super_admin', None, 1, 0, None, 5, 1),
+            (2, 'company_admin', None, 1, 1, 2, 10, 1),
+            (2, 'labor_staff', None, 1, 0, None, 8, 1),
+            (2, 'super_admin', None, 1, 0, None, 5, 1),
+            (3, 'company_user', None, 1, 1, 3, 10, 1),
+            (4, 'company_user', None, 1, 1, 4, 10, 1),
+            (5, 'company_user', None, 1, 1, 5, 10, 1),
+            (5, 'company_admin', None, 1, 0, None, 8, 1),
+            (5, 'labor_staff', None, 1, 0, None, 5, 1),
+            (6, 'labor_staff', None, 1, 0, None, 8, 1),
+            (7, 'company_user', None, 1, 0, None, 5, 1)
+        ]
+        
+        for r in rules:
+            db.session.execute(text("""
+                INSERT INTO notification_rules 
+                (event_type_id, role, event_filter, in_app_enabled, email_enabled, 
+                 email_template_id, priority, is_active)
+                VALUES (:e, :r, :f, :a, :m, :t, :p, :s)
+            """), {'e': r[0], 'r': r[1], 'f': r[2], 'a': r[3], 'm': r[4], 't': r[5], 'p': r[6], 's': r[7]})
+        
+        db.session.commit()
+        results.append(f'✅ Rules created ({len(rules)} rules)')
+        
+        # 5. Create notifications table
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                event_type_id INTEGER NOT NULL,
+                event_data TEXT,
+                message TEXT NOT NULL,
+                link_url VARCHAR(200),
+                request_id INTEGER,
+                is_read INTEGER DEFAULT 0,
+                read_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        db.session.commit()
+        results.append('✅ Notifications table created')
+        
+        # 6. Create smtp_settings
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS smtp_settings (
+                id SERIAL PRIMARY KEY,
+                smtp_host VARCHAR(100),
+                smtp_port INTEGER DEFAULT 587,
+                smtp_username VARCHAR(100),
+                smtp_password VARCHAR(200),
+                from_email VARCHAR(100),
+                from_name VARCHAR(100),
+                use_tls INTEGER DEFAULT 1,
+                is_active INTEGER DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        
+        db.session.execute(text("""
+            INSERT INTO smtp_settings (smtp_host, smtp_port, from_email, from_name, is_active)
+            VALUES (:h, :p, :e, :n, :a)
+        """), {'h': 'smtp.gmail.com', 'p': 587, 'e': 'noreply@example.com', 'n': 'Labor', 'a': 0})
+        
+        db.session.commit()
+        results.append('✅ SMTP settings created')
+        
+        # Success HTML
+        html = """
+        <html>
+        <head>
+            <title>v8.0 Migration Success</title>
+            <style>
+                body { 
+                    font-family: 'Segoe UI', Arial, sans-serif; 
+                    max-width: 900px; 
+                    margin: 50px auto; 
+                    padding: 20px;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                }
+                .container {
+                    background: white;
+                    border-radius: 16px;
+                    padding: 40px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                }
+                h1 { 
+                    color: #10b981; 
+                    font-size: 2.5em;
+                    margin-bottom: 10px;
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                }
+                .subtitle {
+                    color: #6b7280;
+                    font-size: 1.1em;
+                    margin-bottom: 30px;
+                }
+                .step { 
+                    padding: 15px 20px; 
+                    margin: 10px 0; 
+                    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+                    border-left: 5px solid #10b981; 
+                    border-radius: 8px;
+                    font-size: 1.1em;
+                    transition: transform 0.2s;
+                }
+                .step:hover {
+                    transform: translateX(5px);
+                }
+                .footer { 
+                    margin-top: 40px; 
+                    padding-top: 30px; 
+                    border-top: 3px solid #e5e7eb; 
+                }
+                .next-steps {
+                    background: #f9fafb;
+                    padding: 20px;
+                    border-radius: 12px;
+                    margin-top: 20px;
+                }
+                .next-steps h3 {
+                    color: #4f46e5;
+                    margin-top: 0;
+                }
+                .next-steps ol {
+                    font-size: 1.1em;
+                    line-height: 1.8;
+                }
+                .next-steps li {
+                    margin: 10px 0;
+                }
+                .badge {
+                    display: inline-block;
+                    background: #10b981;
+                    color: white;
+                    padding: 5px 15px;
+                    border-radius: 20px;
+                    font-size: 0.9em;
+                    font-weight: bold;
+                    margin-left: 10px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>
+                    <span style="font-size: 1.5em;">✅</span>
+                    v8.0 Migration Sikeres!
+                    <span class="badge">DONE</span>
+                </h1>
+                <div class="subtitle">PostgreSQL táblák létrehozva és feltöltve</div>
+        """
+        
+        for result in results:
+            html += f'<div class="step">{result}</div>'
+        
+        html += """
+                <div class="footer">
+                    <div class="next-steps">
+                        <h3>🎯 Következő lépések:</h3>
+                        <ol>
+                            <li><strong>Login as super_admin</strong> → super@admin.com</li>
+                            <li><strong>Navigálj:</strong> Menü → "Értesítések"</li>
+                            <li><strong>Ellenőrizd:</strong> Rules tab (14 szabály) + Templates tab (5 sablon)</li>
+                            <li><strong>Teszt:</strong> NotificationBell harang ikon működik minden user-nél</li>
+                            <li><strong>Próba:</strong> Hozz létre egy új kérést → értesítés megjelenik</li>
+                        </ol>
+                    </div>
+                    <p style="text-align: center; color: #6b7280; margin-top: 30px; font-size: 0.95em;">
+                        🚀 v8.0 Abstract Notification System aktiválva!<br>
+                        <small>Migration completed successfully at """ + str(__import__('datetime').datetime.now()) + """</small>
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html, 200
+        
+    except Exception as e:
+        import traceback
+        error_html = f"""
+        <html>
+        <head>
+            <title>Migration Error</title>
+            <style>
+                body {{ 
+                    font-family: Arial; 
+                    max-width: 900px; 
+                    margin: 50px auto; 
+                    padding: 20px;
+                    background: linear-gradient(135deg, #fee 0%, #fcc 100%);
+                    min-height: 100vh;
+                }}
+                .container {{
+                    background: white;
+                    border-radius: 16px;
+                    padding: 40px;
+                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                }}
+                h1 {{ color: #ef4444; font-size: 2em; }}
+                pre {{ 
+                    background: #fee; 
+                    padding: 20px; 
+                    border-radius: 8px; 
+                    border-left: 5px solid #ef4444;
+                    overflow-x: auto;
+                    font-size: 0.9em;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>❌ Migration Hiba!</h1>
+                <p><strong>Error:</strong> {str(e)}</p>
+                <pre>{traceback.format_exc()}</pre>
+                <p style="margin-top: 30px; color: #6b7280;">
+                    <strong>Support:</strong> Küldd el ezt a hibaüzenetet debug-olásra!
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        return error_html, 500
+
