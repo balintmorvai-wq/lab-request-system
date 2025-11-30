@@ -3343,8 +3343,8 @@ def cleanup_old_notification_rules(current_user):
                 LEFT JOIN notification_rules nr ON net.id = nr.event_type_id
                 WHERE net.event_key NOT LIKE 'status_to_%'
                 GROUP BY net.id, net.event_key, net.event_name
-                HAVING rule_count > 0
-                ORDER BY rule_count DESC
+                HAVING COUNT(nr.id) > 0
+                ORDER BY COUNT(nr.id) DESC
             """)
         )
         
