@@ -280,18 +280,19 @@ class NotificationService:
     
     @staticmethod
     def _send_email_notification(user, event_data, template_id):
-        """Email értesítés küldése"""
+        """Email értesítés küldése (SMTP vagy API)"""
         import smtplib
         from email.mime.text import MIMEText
         from email.mime.multipart import MIMEMultipart
+        import requests
         
         # Late import - circular import elkerülése
         from app import db
         
-        # SMTP beállítások lekérése
+        # SMTP beállítások lekérése (most már smtp_api_key-vel!)
         cursor = db.session.execute(text("""
             SELECT smtp_host, smtp_port, smtp_username, smtp_password,
-                   from_email, from_name, use_tls, is_active
+                   from_email, from_name, use_tls, is_active, smtp_api_key
             FROM smtp_settings
             LIMIT 1
         """))
@@ -301,7 +302,7 @@ class NotificationService:
             current_app.logger.warning("SMTP not configured or inactive - email not sent")
             return
         
-        smtp_host, smtp_port, smtp_username, smtp_password, from_email, from_name, use_tls, is_active = smtp_settings
+        smtp_host, smtp_port, smtp_username, smtp_password, from_email, from_name, use_tls, is_active, smtp_api_key = smtp_settings
         
         # Template lekérése
         cursor = db.session.execute(text("""
@@ -323,32 +324,72 @@ class NotificationService:
             current_app.logger.warning(f"User {user.id} has no email address")
             return
         
-        try:
-            # Email összeállítás
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = rendered_subject
-            msg['From'] = f"{from_name} <{from_email}>"
-            msg['To'] = user.email
-            
-            msg.attach(MIMEText(rendered_body, 'html'))
-            
-            # SMTP kapcsolat és küldés
-            if use_tls:
-                server = smtplib.SMTP(smtp_host, smtp_port)
-                server.starttls()
-            else:
-                server = smtplib.SMTP(smtp_host, smtp_port)
-            
-            server.login(smtp_username, smtp_password)
-            server.send_message(msg)
-            server.quit()
-            
-            current_app.logger.info(f"Email sent to {user.email}: {rendered_subject}")
-            
-        except smtplib.SMTPException as e:
-            current_app.logger.error(f"SMTP error sending email to {user.email}: {str(e)}")
-        except Exception as e:
-            current_app.logger.error(f"Error sending email to {user.email}: {str(e)}")
+        # ✅ MailerSend API használata ha van API key
+        if smtp_api_key:
+            try:
+                # MailerSend API endpoint
+                url = "https://api.mailersend.com/v1/email"
+                
+                headers = {
+                    "Authorization": f"Bearer {smtp_api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                payload = {
+                    "from": {
+                        "email": from_email,
+                        "name": from_name
+                    },
+                    "to": [
+                        {
+                            "email": user.email,
+                            "name": user.name
+                        }
+                    ],
+                    "subject": rendered_subject,
+                    "html": rendered_body
+                }
+                
+                response = requests.post(url, json=payload, headers=headers)
+                
+                if response.status_code == 202:
+                    current_app.logger.info(f"Email sent via MailerSend API to {user.email}: {rendered_subject}")
+                else:
+                    current_app.logger.error(f"MailerSend API error: {response.status_code} - {response.text}")
+                    
+            except requests.exceptions.RequestException as e:
+                current_app.logger.error(f"MailerSend API request error: {str(e)}")
+            except Exception as e:
+                current_app.logger.error(f"Error sending email via MailerSend: {str(e)}")
+        
+        # ✅ Hagyományos SMTP használata ha nincs API key
+        else:
+            try:
+                # Email összeállítás
+                msg = MIMEMultipart('alternative')
+                msg['Subject'] = rendered_subject
+                msg['From'] = f"{from_name} <{from_email}>"
+                msg['To'] = user.email
+                
+                msg.attach(MIMEText(rendered_body, 'html'))
+                
+                # SMTP kapcsolat és küldés
+                if use_tls:
+                    server = smtplib.SMTP(smtp_host, smtp_port)
+                    server.starttls()
+                else:
+                    server = smtplib.SMTP(smtp_host, smtp_port)
+                
+                server.login(smtp_username, smtp_password)
+                server.send_message(msg)
+                server.quit()
+                
+                current_app.logger.info(f"Email sent via SMTP to {user.email}: {rendered_subject}")
+                
+            except smtplib.SMTPException as e:
+                current_app.logger.error(f"SMTP error sending email to {user.email}: {str(e)}")
+            except Exception as e:
+                current_app.logger.error(f"Error sending email via SMTP to {user.email}: {str(e)}")
     
     @staticmethod
     def _render_template(template, data):

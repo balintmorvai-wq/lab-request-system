@@ -60,10 +60,11 @@ function NotificationManagement() {
       setTemplates(tempsData.templates || []);
       setRules(rulesData.rules || []);
       setSmtpSettings(smtpData.settings || {
-        smtp_host: 'smtp.gmail.com',
+        smtp_host: 'smtp.mailersend.net',
         smtp_port: 587,
         smtp_username: '',
         smtp_password: '',
+        smtp_api_key: '',
         from_email: 'noreply@example.com',
         from_name: 'Lab Request System',
         use_tls: 1,
@@ -1009,7 +1010,7 @@ function NotificationManagement() {
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Jelszó (App Password)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Jelszó (App Password / SMTP)</label>
               <input
                 type="password"
                 value={smtpSettings.smtp_password || ''}
@@ -1018,6 +1019,25 @@ function NotificationManagement() {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               />
               <p className="mt-1 text-xs text-gray-500">Gmail esetén App Password szükséges (2FA engedélyezve)</p>
+            </div>
+
+            {/* API Key - MailerSend, SendGrid, stb. */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                API Token/Key (Opcionális)
+                <span className="ml-2 text-xs text-gray-500">MailerSend, SendGrid, Mailgun használata esetén</span>
+              </label>
+              <input
+                type="password"
+                value={smtpSettings.smtp_api_key || ''}
+                onChange={(e) => setSmtpSettings({ ...smtpSettings, smtp_api_key: e.target.value })}
+                placeholder="mlsn.••••••••••••••••"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                ✨ Ha API key megadva, az lesz használva (SMTP helyett). 
+                MailerSend: smtp.mailersend.net, Port: 587
+              </p>
             </div>
 
             {/* From Email */}

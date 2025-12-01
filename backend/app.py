@@ -339,6 +339,10 @@ class Notification(db.Model):
 class SMTPSettings(db.Model):
     """
     SMTP beállítások email küldéshez
+    
+    Támogatott módok:
+    1. SMTP (smtp_host, smtp_port, smtp_username, smtp_password, use_tls)
+    2. API (smtp_api_key) - pl. MailerSend, SendGrid, Mailgun
     """
     __tablename__ = 'smtp_settings'
     
@@ -347,6 +351,7 @@ class SMTPSettings(db.Model):
     smtp_port = db.Column(db.Integer, default=587)
     smtp_username = db.Column(db.String(100))
     smtp_password = db.Column(db.String(200))
+    smtp_api_key = db.Column(db.String(500))  # ✅ ÚJ - API token (MailerSend, SendGrid, stb.)
     from_email = db.Column(db.String(100))
     from_name = db.Column(db.String(100))
     use_tls = db.Column(db.Integer, default=1)
@@ -2991,10 +2996,11 @@ def get_smtp_settings(current_user):
         # Return default settings
         return jsonify({
             'settings': {
-                'smtp_host': 'smtp.gmail.com',
+                'smtp_host': 'smtp.mailersend.net',
                 'smtp_port': 587,
                 'smtp_username': '',
                 'smtp_password': '',
+                'smtp_api_key': '',
                 'from_email': 'noreply@example.com',
                 'from_name': 'Lab Request System',
                 'use_tls': 1,
@@ -3009,6 +3015,7 @@ def get_smtp_settings(current_user):
             'smtp_port': settings.smtp_port,
             'smtp_username': settings.smtp_username,
             'smtp_password': settings.smtp_password,
+            'smtp_api_key': settings.smtp_api_key,
             'from_email': settings.from_email,
             'from_name': settings.from_name,
             'use_tls': settings.use_tls,
@@ -3032,6 +3039,7 @@ def update_smtp_settings(current_user):
             smtp_port=data.get('smtp_port', 587),
             smtp_username=data.get('smtp_username'),
             smtp_password=data.get('smtp_password'),
+            smtp_api_key=data.get('smtp_api_key'),
             from_email=data.get('from_email'),
             from_name=data.get('from_name', 'Lab Request System'),
             use_tls=data.get('use_tls', 1),
@@ -3047,6 +3055,10 @@ def update_smtp_settings(current_user):
         # Only update password if provided (not empty)
         if data.get('smtp_password'):
             settings.smtp_password = data.get('smtp_password')
+        
+        # Only update API key if provided (not empty)
+        if data.get('smtp_api_key'):
+            settings.smtp_api_key = data.get('smtp_api_key')
             
         settings.from_email = data.get('from_email', settings.from_email)
         settings.from_name = data.get('from_name', settings.from_name)
@@ -3386,6 +3398,49 @@ def cleanup_old_notification_rules(current_user):
         return jsonify({
             'success': False,
             'error': f'Cleanup hiba: {str(e)}'
+        }), 500
+
+@app.route('/api/admin/migrate-smtp-api-key', methods=['POST'])
+@token_required
+@role_required('super_admin')
+def migrate_smtp_api_key(current_user):
+    """
+    SMTP settings migration - smtp_api_key oszlop hozzáadása
+    """
+    try:
+        # Ellenőrzés: létezik-e már az oszlop
+        check_column = db.session.execute(text("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name='smtp_settings' AND column_name='smtp_api_key'
+        """))
+        
+        if check_column.fetchone():
+            return jsonify({
+                'success': True,
+                'message': 'smtp_api_key oszlop már létezik!',
+                'already_exists': True
+            }), 200
+        
+        # Oszlop hozzáadása
+        db.session.execute(text("""
+            ALTER TABLE smtp_settings 
+            ADD COLUMN smtp_api_key VARCHAR(500)
+        """))
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'smtp_api_key oszlop sikeresen hozzáadva!',
+            'already_exists': False
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Migration hiba: {str(e)}'
         }), 500
 
 # v8.0: === END NOTIFICATION MODULE ===
