@@ -3159,7 +3159,8 @@ def test_smtp(current_user):
             msg['From'] = f"{settings.from_name} <{settings.from_email}>"
             msg['To'] = to_email
             
-            msg.attach(MIMEText(html, 'html'))
+            # ✅ UTF-8 charset for Hungarian characters
+            msg.attach(MIMEText(html, 'html', 'utf-8'))
             
             # Send email
             if settings.use_tls:

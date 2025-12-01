@@ -371,7 +371,8 @@ class NotificationService:
                 msg['From'] = f"{from_name} <{from_email}>"
                 msg['To'] = user.email
                 
-                msg.attach(MIMEText(rendered_body, 'html'))
+                # ✅ UTF-8 charset for Hungarian characters
+                msg.attach(MIMEText(rendered_body, 'html', 'utf-8'))
                 
                 # SMTP kapcsolat és küldés
                 if use_tls:
