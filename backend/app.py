@@ -3065,7 +3065,8 @@ def update_smtp_settings(current_user):
         if 'from_email' in data:
             settings.from_email = data['from_email']
         if 'from_name' in data:
-            settings.from_name = data['from_name']
+            # Ha üres string, használjuk a default értéket
+            settings.from_name = data['from_name'] if data['from_name'] else 'Lab Request System'
         if 'use_tls' in data:
             settings.use_tls = data['use_tls']
         if 'is_active' in data:

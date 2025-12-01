@@ -41,8 +41,13 @@ class NotificationService:
             old_status (str): Régi státusz
             new_status (str): Új státusz
         """
+        import os
+        
         # Új státusz-alapú event key
         event_key = f"status_to_{new_status}"
+        
+        # Frontend URL environment variable-ból
+        frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
         
         # Event data összeállítása
         event_data = {
@@ -52,8 +57,8 @@ class NotificationService:
             'new_status': new_status,
             'company_name': request.company.name if request.company else '',
             'requester_name': request.user.name if request.user else '',
-            # ✅ request_url email template-ekhez
-            'request_url': f"https://lab-request.yourdomain.com/requests?search={request.request_number}"
+            # ✅ request_url dinamikus frontend URL-lel
+            'request_url': f"{frontend_url}/requests?search={request.request_number}"
         }
         
         # Értesítés küldése
@@ -111,8 +116,12 @@ class NotificationService:
         # Generate message
         # Ha van request_id és ez státusz-alapú event, akkor lekérjük a request adatait
         if request_id and event_key.startswith('status_to_'):
+            import os
             request = LabRequest.query.get(request_id)
             if request:
+                # Frontend URL environment variable-ból
+                frontend_url = os.environ.get('FRONTEND_URL', 'http://localhost:3000')
+                
                 # Felülírjuk az event_data-t a request aktuális adataival
                 event_data = {
                     **event_data,  # Meglévő adatok megtartása
@@ -121,8 +130,8 @@ class NotificationService:
                     'company_name': request.company.name if request.company else '',
                     'requester_name': request.user.name if request.user else '',
                     'new_status': request.status,
-                    # ✅ request_url hozzáadása email template-ekhez
-                    'request_url': f"https://lab-request.yourdomain.com/requests?search={request.request_number}"
+                    # ✅ request_url dinamikus frontend URL-lel
+                    'request_url': f"{frontend_url}/requests?search={request.request_number}"
                 }
         
         message = NotificationService._generate_in_app_message(event_key, event_data)
