@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Bell, Check, CheckCheck, Trash2, X } from 'lucide-react';
 
 function NotificationBell() {
   const { getAuthHeaders, API_URL } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
@@ -88,9 +90,10 @@ function NotificationBell() {
       markAsRead(notification.id);
     }
     
-    // Ha van link, navigálás
+    // ✅ Ha van link, navigálás (React Router SPA navigation)
     if (notification.link_url) {
-      window.location.href = notification.link_url;
+      setIsOpen(false);  // Dropdown bezárása
+      navigate(notification.link_url);
     }
   };
 

@@ -42,6 +42,12 @@ function RequestList() {
     if (statusFromUrl) {
       setStatusFilter(statusFromUrl);
     }
+    
+    // ✅ v8.3.4: Check URL params for search term (notification linkekből)
+    const searchFromUrl = searchParams.get('search');
+    if (searchFromUrl) {
+      setSearchTerm(searchFromUrl);
+    }
   }, [searchParams]);
 
   useEffect(() => {

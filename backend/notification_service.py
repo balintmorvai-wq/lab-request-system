@@ -51,7 +51,9 @@ class NotificationService:
             'old_status': old_status,
             'new_status': new_status,
             'company_name': request.company.name if request.company else '',
-            'requester_name': request.user.name if request.user else ''
+            'requester_name': request.user.name if request.user else '',
+            # ✅ request_url email template-ekhez
+            'request_url': f"https://lab-request.yourdomain.com/requests?search={request.request_number}"
         }
         
         # Értesítés küldése
@@ -118,11 +120,14 @@ class NotificationService:
                     'request_number': request.request_number,
                     'company_name': request.company.name if request.company else '',
                     'requester_name': request.user.name if request.user else '',
-                    'new_status': request.status
+                    'new_status': request.status,
+                    # ✅ request_url hozzáadása email template-ekhez
+                    'request_url': f"https://lab-request.yourdomain.com/requests?search={request.request_number}"
                 }
         
         message = NotificationService._generate_in_app_message(event_key, event_data)
-        link_url = f"/requests/{request_id}" if request_id else None
+        # ✅ Link URL szűrővel - navigál a kérések listára request_number szűrővel
+        link_url = f"/requests?search={event_data.get('request_number', '')}" if request_id and event_data.get('request_number') else None
         
         # Create notifications
         stats = {'in_app_count': 0, 'email_count': 0}
