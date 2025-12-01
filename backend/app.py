@@ -3047,23 +3047,30 @@ def update_smtp_settings(current_user):
         )
         db.session.add(settings)
     else:
-        # Update existing settings
-        settings.smtp_host = data.get('smtp_host', settings.smtp_host)
-        settings.smtp_port = data.get('smtp_port', settings.smtp_port)
-        settings.smtp_username = data.get('smtp_username', settings.smtp_username)
+        # Update existing settings - ✅ ALWAYS update if key exists in data
+        if 'smtp_host' in data:
+            settings.smtp_host = data['smtp_host']
+        if 'smtp_port' in data:
+            settings.smtp_port = data['smtp_port']
+        if 'smtp_username' in data:
+            settings.smtp_username = data['smtp_username']
         
-        # Only update password if provided (not empty)
+        # Only update password/api_key if provided and not empty
         if data.get('smtp_password'):
-            settings.smtp_password = data.get('smtp_password')
-        
-        # Only update API key if provided (not empty)
+            settings.smtp_password = data['smtp_password']
         if data.get('smtp_api_key'):
-            settings.smtp_api_key = data.get('smtp_api_key')
+            settings.smtp_api_key = data['smtp_api_key']
+        
+        # ✅ ALWAYS update these fields if present in data
+        if 'from_email' in data:
+            settings.from_email = data['from_email']
+        if 'from_name' in data:
+            settings.from_name = data['from_name']
+        if 'use_tls' in data:
+            settings.use_tls = data['use_tls']
+        if 'is_active' in data:
+            settings.is_active = data['is_active']
             
-        settings.from_email = data.get('from_email', settings.from_email)
-        settings.from_name = data.get('from_name', settings.from_name)
-        settings.use_tls = data.get('use_tls', settings.use_tls)
-        settings.is_active = data.get('is_active', settings.is_active)
         settings.updated_at = datetime.datetime.utcnow()
     
     db.session.commit()

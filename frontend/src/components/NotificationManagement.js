@@ -353,6 +353,10 @@ function NotificationManagement() {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
+      
+      // ✅ Debug log - mi kerül mentésre
+      console.log('💾 Saving SMTP settings:', smtpSettings);
+      
       const response = await fetch(`${process.env.REACT_APP_API_URL}/admin/smtp-settings`, {
         method: 'PUT',
         headers: {
@@ -364,6 +368,17 @@ function NotificationManagement() {
 
       if (response.ok) {
         showMessage('SMTP beállítások mentve!', 'success');
+        
+        // ✅ Reload settings from backend to confirm
+        const reloadRes = await fetch(`${process.env.REACT_APP_API_URL}/admin/smtp-settings`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const reloadData = await reloadRes.json();
+        console.log('✅ Reloaded SMTP settings:', reloadData.settings);
+        setSmtpSettings(reloadData.settings);
+      } else {
+        const errorData = await response.json();
+        showMessage(`Mentési hiba: ${errorData.error || 'Ismeretlen hiba'}`, 'error');
       }
     } catch (error) {
       console.error('SMTP save error:', error);
