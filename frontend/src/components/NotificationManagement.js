@@ -751,36 +751,34 @@ function NotificationManagement() {
                                 <span className="text-xs text-gray-700">App</span>
                               </label>
 
-                              {/* Email Checkbox */}
-                              {statusTemplates.length > 0 && (
-                                <label className="flex items-center space-x-2 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={rule?.email_enabled || false}
-                                    onChange={() => toggleEmail(status.key, role.key)}
-                                    disabled={saving}
-                                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                                  />
-                                  <Mail className="w-4 h-4 text-gray-500" />
-                                </label>
-                              )}
+                              {/* Email Checkbox - ALWAYS VISIBLE */}
+                              <label className="flex items-center space-x-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={rule?.email_enabled || false}
+                                  onChange={() => toggleEmail(status.key, role.key)}
+                                  disabled={saving}
+                                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                                />
+                                <Mail className="w-4 h-4 text-gray-500" />
+                              </label>
 
-                              {/* Email Template Selector - ALWAYS VISIBLE BUT DISABLED */}
+                              {/* Email Template Selector - ALWAYS VISIBLE */}
                               <div style={{height: '32px', width: '100%'}}>
-                                {statusTemplates.length > 0 && (
-                                  <select
-                                    value={rule?.email_template_id || ''}
-                                    onChange={(e) => changeTemplate(status.key, role.key, e.target.value)}
-                                    disabled={saving || !rule?.email_enabled}
-                                    className="text-xs border-gray-300 rounded px-2 py-1 w-full disabled:opacity-50"
-                                    style={{fontSize: '11px'}}
-                                  >
-                                    <option value="">Sablon...</option>
-                                    {statusTemplates.map(t => (
-                                      <option key={t.id} value={t.id}>{t.name}</option>
-                                    ))}
-                                  </select>
-                                )}
+                                <select
+                                  value={rule?.email_template_id || ''}
+                                  onChange={(e) => changeTemplate(status.key, role.key, e.target.value)}
+                                  disabled={saving || !rule?.email_enabled || statusTemplates.length === 0}
+                                  className="text-xs border-gray-300 rounded px-2 py-1 w-full disabled:opacity-50"
+                                  style={{fontSize: '11px'}}
+                                >
+                                  <option value="">
+                                    {statusTemplates.length === 0 ? 'Nincs sablon' : 'Sablon...'}
+                                  </option>
+                                  {statusTemplates.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                  ))}
+                                </select>
                               </div>
                             </div>
                           </td>

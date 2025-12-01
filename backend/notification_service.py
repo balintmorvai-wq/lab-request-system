@@ -32,6 +32,36 @@ class NotificationService:
     """Központi értesítési szolgáltatás"""
     
     @staticmethod
+    def notify_status_change(request, old_status, new_status):
+        """
+        Státuszváltozás értesítés - új status_to_* rendszerrel
+        
+        Args:
+            request: LabRequest object
+            old_status (str): Régi státusz
+            new_status (str): Új státusz
+        """
+        # Új státusz-alapú event key
+        event_key = f"status_to_{new_status}"
+        
+        # Event data összeállítása
+        event_data = {
+            'request_id': request.id,
+            'request_number': request.request_number,
+            'old_status': old_status,
+            'new_status': new_status,
+            'company_name': request.company.name if request.company else '',
+            'requester_name': request.user.name if request.user else ''
+        }
+        
+        # Értesítés küldése
+        return NotificationService.notify(
+            event_key=event_key,
+            request_id=request.id,
+            event_data=event_data
+        )
+    
+    @staticmethod
     def notify(event_key, request_id=None, event_data=None, specific_users=None):
         """
         Értesítés küldése esemény alapján
@@ -77,6 +107,20 @@ class NotificationService:
             return {'in_app_count': 0, 'email_count': 0}
         
         # Generate message
+        # Ha van request_id és ez státusz-alapú event, akkor lekérjük a request adatait
+        if request_id and event_key.startswith('status_to_'):
+            request = LabRequest.query.get(request_id)
+            if request:
+                # Felülírjuk az event_data-t a request aktuális adataival
+                event_data = {
+                    **event_data,  # Meglévő adatok megtartása
+                    'request_id': request.id,
+                    'request_number': request.request_number,
+                    'company_name': request.company.name if request.company else '',
+                    'requester_name': request.user.name if request.user else '',
+                    'new_status': request.status
+                }
+        
         message = NotificationService._generate_in_app_message(event_key, event_data)
         link_url = f"/requests/{request_id}" if request_id else None
         
@@ -176,10 +220,32 @@ class NotificationService:
     @staticmethod
     def _generate_in_app_message(event_key, event_data):
         """In-app notification message generálása"""
-        # Event-specific messages
+        # Státusz-alapú események (status_to_*)
+        if event_key.startswith('status_to_'):
+            status_name_map = {
+                'status_to_draft': 'Vázlat',
+                'status_to_pending_approval': 'Jóváhagyásra vár',
+                'status_to_awaiting_shipment': 'Szállításra vár',
+                'status_to_in_transit': 'Szállítás alatt',
+                'status_to_arrived_at_provider': 'Laborban',
+                'status_to_in_progress': 'Folyamatban',
+                'status_to_validation_pending': 'Validálásra vár',
+                'status_to_completed': 'Befejezett'
+            }
+            
+            status_hu = status_name_map.get(event_key, event_key.replace('status_to_', '').replace('_', ' ').title())
+            request_number = event_data.get('request_number', 'N/A')
+            company_name = event_data.get('company_name', '')
+            
+            if company_name:
+                return f"{company_name} - {request_number}: {status_hu}"
+            else:
+                return f"{request_number}: {status_hu}"
+        
+        # Régi event-specific messages (visszafelé kompatibilitás)
         templates = {
-            'status_change': "Kérés státusza megváltozott: {old_status} → {new_status}",
-            'new_request': "Új labor kérés érkezett: {request_number}",
+            'status_change': "Kérés státusza: {old_status} → {new_status} ({request_number})",
+            'new_request': "Új labor kérés: {request_number} - {company_name}",
             'request_approved': "Kérés jóváhagyva: {request_number}",
             'request_rejected': "Kérés elutasítva: {request_number}",
             'results_uploaded': "Eredmények feltöltve: {request_number}",
@@ -192,7 +258,13 @@ class NotificationService:
         try:
             return template.format(**event_data, event_key=event_key)
         except KeyError:
-            return f"Esemény: {event_key}"
+            # Ha hiányoznak adatok, próbáljuk meg ami van
+            available_data = {k: v for k, v in event_data.items()}
+            available_data['event_key'] = event_key
+            try:
+                return template.format(**available_data)
+            except:
+                return f"Esemény: {event_key}"
     
     @staticmethod
     def _create_in_app_notification(user_id, event_type_id, message, link_url, request_id, event_data):
