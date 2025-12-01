@@ -374,6 +374,17 @@ function NotificationManagement() {
   };
 
   const testEmail = async () => {
+    // Teszt email cím bekérése
+    const testEmailAddress = prompt(
+      'Add meg a teszt email címet ahova küldeni szeretnéd:',
+      smtpSettings.smtp_username || smtpSettings.from_email || ''
+    );
+    
+    if (!testEmailAddress || !testEmailAddress.trim()) {
+      showMessage('Email cím megadása kötelező!', 'error');
+      return;
+    }
+    
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
@@ -383,14 +394,14 @@ function NotificationManagement() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ to_email: smtpSettings.smtp_username })
+        body: JSON.stringify({ to_email: testEmailAddress.trim() })
       });
 
       const data = await response.json();
       if (response.ok) {
-        showMessage('Teszt email elküldve! Ellenőrizd a postafiókot.', 'success');
+        showMessage(`✅ ${data.message}`, 'success');
       } else {
-        showMessage(`Email hiba: ${data.error}`, 'error');
+        showMessage(`❌ ${data.error}`, 'error');
       }
     } catch (error) {
       console.error('Test email error:', error);
@@ -1087,7 +1098,7 @@ function NotificationManagement() {
               
               <button
                 onClick={testEmail}
-                disabled={saving || !smtpSettings.smtp_username}
+                disabled={saving || (!smtpSettings.smtp_username && !smtpSettings.smtp_api_key)}
                 className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
               >
                 <Mail className="w-4 h-4" />

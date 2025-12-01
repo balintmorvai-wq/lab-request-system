@@ -3074,10 +3074,11 @@ def update_smtp_settings(current_user):
 @token_required
 @role_required('super_admin')
 def test_smtp(current_user):
-    """SMTP kapcsolat tesztelése teszt email küldéssel"""
+    """SMTP/API kapcsolat tesztelése teszt email küldéssel"""
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
+    import requests
     
     data = request.get_json()
     to_email = data.get('to_email')
@@ -3089,44 +3090,94 @@ def test_smtp(current_user):
     if not settings:
         return jsonify({'error': 'SMTP beállítások nincsenek konfigurálva!'}), 400
     
+    if not settings.is_active:
+        return jsonify({'error': 'Email rendszer nincs aktiválva! Kapcsold be az "Email értesítések aktívak" checkbox-ot.'}), 400
+    
+    # Email body
+    html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2 style="color: #4F46E5;">SMTP/API Teszt Email Sikeres! ✅</h2>
+        <p>Ez egy teszt email a Lab Request System értesítési rendszeréből.</p>
+        <p><strong>Szerver:</strong> {settings.smtp_host}:{settings.smtp_port}</p>
+        <p><strong>Küldés módja:</strong> {'MailerSend API' if settings.smtp_api_key else 'Hagyományos SMTP'}</p>
+        <p><strong>Küldés ideje:</strong> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <hr style="border: 1px solid #E5E7EB; margin: 20px 0;">
+        <p style="color: #6B7280; font-size: 12px;">
+          Ha ezt az emailt megkaptad, az email beállításaid helyesek! 🎉
+        </p>
+      </body>
+    </html>
+    """
+    
     try:
-        # Create message
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = 'SMTP Teszt Email - Lab Request System'
-        msg['From'] = f"{settings.from_name} <{settings.from_email}>"
-        msg['To'] = to_email
+        # ✅ MailerSend API használata ha van API key
+        if settings.smtp_api_key:
+            url = "https://api.mailersend.com/v1/email"
+            
+            headers = {
+                "Authorization": f"Bearer {settings.smtp_api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            payload = {
+                "from": {
+                    "email": settings.from_email,
+                    "name": settings.from_name
+                },
+                "to": [
+                    {
+                        "email": to_email
+                    }
+                ],
+                "subject": "SMTP/API Teszt Email - Lab Request System",
+                "html": html
+            }
+            
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            
+            if response.status_code == 202:
+                return jsonify({'message': 'Teszt email sikeresen elküldve MailerSend API-val! 📧'}), 200
+            else:
+                error_msg = f"MailerSend API hiba: {response.status_code}"
+                try:
+                    error_data = response.json()
+                    if 'message' in error_data:
+                        error_msg += f" - {error_data['message']}"
+                except:
+                    pass
+                return jsonify({'error': error_msg}), 400
         
-        # Email body
-        html = f"""
-        <html>
-          <body style="font-family: Arial, sans-serif; padding: 20px;">
-            <h2 style="color: #4F46E5;">SMTP Teszt Email Sikeres! ✅</h2>
-            <p>Ez egy teszt email a Lab Request System értesítési rendszeréből.</p>
-            <p><strong>SMTP Szerver:</strong> {settings.smtp_host}:{settings.smtp_port}</p>
-            <p><strong>Küldés ideje:</strong> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-            <hr style="border: 1px solid #E5E7EB; margin: 20px 0;">
-            <p style="color: #6B7280; font-size: 12px;">
-              Ha ezt az emailt megkaptad, az SMTP beállításaid helyesek! 🎉
-            </p>
-          </body>
-        </html>
-        """
-        
-        msg.attach(MIMEText(html, 'html'))
-        
-        # Send email
-        if settings.use_tls:
-            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
-            server.starttls()
+        # ✅ Hagyományos SMTP használata ha nincs API key
         else:
-            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
+            if not settings.smtp_username or not settings.smtp_password:
+                return jsonify({'error': 'SMTP felhasználónév és jelszó megadása kötelező! (Vagy adj meg API Token-t)'}), 400
+            
+            # Create message
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = 'SMTP Teszt Email - Lab Request System'
+            msg['From'] = f"{settings.from_name} <{settings.from_email}>"
+            msg['To'] = to_email
+            
+            msg.attach(MIMEText(html, 'html'))
+            
+            # Send email
+            if settings.use_tls:
+                server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10)
+                server.starttls()
+            else:
+                server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10)
+            
+            server.login(settings.smtp_username, settings.smtp_password)
+            server.send_message(msg)
+            server.quit()
+            
+            return jsonify({'message': 'Teszt email sikeresen elküldve SMTP-vel! 📧'}), 200
         
-        server.login(settings.smtp_username, settings.smtp_password)
-        server.send_message(msg)
-        server.quit()
-        
-        return jsonify({'message': 'Teszt email sikeresen elküldve!'}), 200
-        
+    except requests.exceptions.Timeout:
+        return jsonify({'error': 'MailerSend API timeout - próbáld újra!'}), 400
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'MailerSend API hiba: {str(e)}'}), 400
     except smtplib.SMTPAuthenticationError:
         return jsonify({'error': 'SMTP authentikációs hiba! Ellenőrizd a felhasználónevet és jelszót.'}), 400
     except smtplib.SMTPException as e:
