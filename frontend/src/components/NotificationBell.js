@@ -19,6 +19,12 @@ function NotificationBell() {
         headers: getAuthHeaders()
       });
       const data = await response.json();
+      console.log('📥 Fetched notifications:', data.notifications.map(n => ({ 
+        id: n.id, 
+        message: n.message.substring(0, 30) + '...', 
+        is_read: n.is_read, 
+        read_at: n.read_at 
+      })));
       setNotifications(data.notifications || []);
       setUnreadCount(data.unread_count || 0);
     } catch (error) {
@@ -29,6 +35,7 @@ function NotificationBell() {
   // Olvasottnak jelölés
   const markAsRead = async (notificationId) => {
     try {
+      console.log('✅ Marking as read:', notificationId);
       await fetch(`${API_URL}/notifications/${notificationId}/read`, {
         method: 'PUT',
         headers: getAuthHeaders()
@@ -39,6 +46,7 @@ function NotificationBell() {
         n.id === notificationId ? { ...n, read_at: new Date().toISOString() } : n
       ));
       setUnreadCount(prev => Math.max(0, prev - 1));
+      console.log('✅ Marked as read locally:', notificationId);
     } catch (error) {
       console.error('Mark as read error:', error);
     }

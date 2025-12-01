@@ -464,7 +464,7 @@ class NotificationService:
         from app import db
         
         query = """
-            SELECT n.id, n.message, n.link_url, n.is_read, n.created_at, 
+            SELECT n.id, n.message, n.link_url, n.is_read, n.read_at, n.created_at, 
                    net.event_key, net.event_name, n.event_data
             FROM notifications n
             JOIN notification_event_types net ON n.event_type_id = net.id
@@ -488,10 +488,11 @@ class NotificationService:
                 'message': row[1],
                 'link_url': row[2],
                 'is_read': bool(row[3]),
-                'created_at': row[4],
-                'event_key': row[5],
-                'event_name': row[6],
-                'event_data': json.loads(row[7]) if row[7] else {}
+                'read_at': row[4],  # ✅ read_at mező hozzáadva!
+                'created_at': row[5],
+                'event_key': row[6],
+                'event_name': row[7],
+                'event_data': json.loads(row[8]) if row[8] else {}
             })
         
         return notifications
