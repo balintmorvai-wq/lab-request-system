@@ -1258,14 +1258,15 @@ def create_request(current_user):
     # Single commit for request
     db.session.commit()
     
-    # v8.0: Notification Service - új kérés létrehozva
+    # v8.0: Notification Service - új kérés létrehozva (draft státuszba)
     event_data = {
         'request_number': new_request.request_number,
         'company_name': new_request.company.name if new_request.company else '',
         'requester_name': current_user.name,
-        'category': new_request.category.name if new_request.category else ''
+        'new_status': 'draft',
+        'old_status': None
     }
-    NotificationService.notify('new_request', request_id=new_request.id, event_data=event_data)
+    NotificationService.notify('status_to_draft', request_id=new_request.id, event_data=event_data)
     
     # v7.0: Automatikus TestResult rekordok létrehozása minden vizsgálathoz
     # v7.0.1: Fix - use test_type_ids already parsed above (line 911)
@@ -1308,6 +1309,8 @@ def update_request(current_user, request_id):
         
         # v8.0: Státuszváltozás notification
         if new_status_value != old_status_value:
+            # ✅ Státusz-alapú event key: status_to_{new_status}
+            event_key = f'status_to_{new_status_value}'
             event_data = {
                 'request_number': req.request_number,
                 'old_status': old_status_value,
@@ -1315,19 +1318,13 @@ def update_request(current_user, request_id):
                 'company_name': req.company.name if req.company else '',
                 'requester_name': req.user.name
             }
-            NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
+            NotificationService.notify(event_key, request_id=req.id, event_data=event_data)
         
         # v8.0: Jóváhagyás (pending_approval → awaiting_shipment)
         if new_status_value == 'awaiting_shipment' and current_user.role == 'company_admin' and old_status_value == 'pending_approval':
             req.approved_by = current_user.id
             req.approved_at = datetime.datetime.utcnow()
-            
-            approval_data = {
-                'request_number': req.request_number,
-                'approver_name': current_user.name,
-                'company_name': req.company.name if req.company else ''
-            }
-            NotificationService.notify('request_approved', request_id=req.id, event_data=approval_data)
+            # Notification már elküldve a státuszváltozás miatt (status_to_awaiting_shipment)
     
     if 'sample_id' in data:
         req.sample_id = data['sample_id']
@@ -1802,7 +1799,7 @@ def submit_for_validation(current_user, request_id):
         'company_name': req.company.name if req.company else '',
         'requester_name': req.user.name
     }
-    NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
+    NotificationService.notify('status_to_validation_pending', request_id=req.id, event_data=event_data)
     
     return jsonify({
         'message': 'Kérés validálásra küldve!',
@@ -1892,7 +1889,7 @@ def complete_request_validation(current_user, request_id):
         'company_name': req.company.name if req.company else '',
         'requester_name': req.user.name
     }
-    NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
+    NotificationService.notify('status_to_completed', request_id=req.id, event_data=event_data)
     
     return jsonify({
         'message': 'Kérés sikeresen lezárva!',
@@ -2651,6 +2648,7 @@ def update_logistics_status(current_user, request_id):
     db.session.commit()
     
     # v8.0: Státuszváltozás notification
+    event_key = f'status_to_{new_status}'  # ✅ Dinamikus event key
     event_data = {
         'request_number': req.request_number,
         'old_status': old_status,
@@ -2658,7 +2656,7 @@ def update_logistics_status(current_user, request_id):
         'company_name': req.company.name if req.company else '',
         'requester_name': req.user.name
     }
-    NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
+    NotificationService.notify(event_key, request_id=req.id, event_data=event_data)
     
     return jsonify({
         'message': 'Státusz sikeresen frissítve!',
@@ -2718,7 +2716,7 @@ def scan_qr_code(current_user):
         'company_name': req.company.name if req.company else '',
         'requester_name': req.user.name
     }
-    NotificationService.notify('status_change', request_id=req.id, event_data=event_data)
+    NotificationService.notify('status_to_in_transit', request_id=req.id, event_data=event_data)
     
     return jsonify({
         'success': True,
